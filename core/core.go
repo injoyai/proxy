@@ -2,36 +2,40 @@ package core
 
 import (
 	"fmt"
+	"github.com/injoyai/logs"
 	"io"
 	"net"
 )
 
-type P2P struct {
-	Port    int
-	Address string
+type Forward struct {
+	ListenPort   int
+	ProxyAddress string
 }
 
-func (this *P2P) ListenTCP(port int) error {
+func (this *Forward) ListenTCP() error {
 
-	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", this.ListenPort))
 	if err != nil {
 		return err
 	}
+
+	logs.Infof("[:%d] 监听成功...\n", this.ListenPort)
 
 	for {
 		c, err := listener.Accept()
 		if err != nil {
 			return err
 		}
+		logs.Infof("[%s] 代理至 [%s]\n", c.RemoteAddr().String(), this.ProxyAddress)
 		go this.Handler(c)
 	}
 
 }
 
-func (this *P2P) Handler(c net.Conn) error {
+func (this *Forward) Handler(c net.Conn) error {
 	defer c.Close()
 
-	newConn, err := net.Dial("tcp", this.Address)
+	newConn, err := net.Dial("tcp", this.ProxyAddress)
 	if err != nil {
 		return err
 	}
