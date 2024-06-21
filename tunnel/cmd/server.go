@@ -7,7 +7,7 @@ import (
 )
 
 func init() {
-	logs.SetFormatterWithTime()
+	//logs.SetFormatterWithTime()
 	logs.SetWriter(logs.Stdout)
 }
 

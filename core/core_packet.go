@@ -27,8 +27,13 @@ func Write(c io.Writer, any interface{ Bytes() []byte }) (int, error) {
 }
 
 // Read 前2字节是定位标识,后面4字节是数据长度,后续是数据域
-func Read(r *bufio.Reader) ([]byte, error) {
-	var buf []byte
+func Read(r *bufio.Reader) (buf []byte, err error) {
+	defer func() {
+		if err != nil {
+			logs.Read(string(buf))
+		}
+	}()
+
 	for {
 
 		//校验标识字节0x8989

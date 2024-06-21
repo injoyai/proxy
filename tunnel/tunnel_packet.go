@@ -12,8 +12,12 @@ const (
 	Info     = 'i' //信息
 	Register = 'r' //注册
 	Split    = '#' //分隔符
-	Request  = 0   //请求
-	Response = 1   //响应
+
+	Request  = 0x00 //请求
+	Response = 0x80 //响应
+	Success  = 0x00 //成功
+	Fail     = 0x40 //失败
+	NeedAck  = 0x20 //需要响应
 )
 
 type Packet struct {
@@ -22,10 +26,10 @@ type Packet struct {
 	//第二位是结果,0是成功,1是失败
 	//第三位是是否需要响应,0是不需要,1是需要
 	//第4~8位预留
-	Code    byte   `json:"code,omitempty"`
-	Type    byte   `json:"type"`
-	Address string `json:""`
-	Body    []byte
+	Code byte   `json:"code,omitempty"` //消息状态码(控制码)
+	Type byte   `json:"type"`           //消息类型,读写开关
+	Key  string `json:"key"`            //消息标识,远程的地址
+	Data []byte `json:"data"`           //消息内容
 }
 
 // IsRequest 是否是请求数据
@@ -43,18 +47,18 @@ func (this *Packet) Success() bool {
 	return this.Code&0x40 == 0
 }
 
-// NeedResponse 是否需要响应,当为请求时生效
-func (this *Packet) NeedResponse() bool {
+// NeedAck 是否需要确认,当为请求时生效
+func (this *Packet) NeedAck() bool {
 	return this.Code&0x20 == 0x20
 }
 
 func (this *Packet) Bytes() []byte {
-	bs := make([]byte, len(this.Body)+len(this.Address)+3)
+	bs := make([]byte, len(this.Data)+len(this.Key)+3)
 	bs[0] = this.Code
 	bs[1] = this.Type
-	copy(bs[2:], []byte(this.Address))
-	bs[len(this.Address)+2] = Split
-	copy(bs[len(this.Address)+3:], this.Body)
+	copy(bs[2:], []byte(this.Key))
+	bs[len(this.Key)+2] = Split
+	copy(bs[len(this.Key)+3:], this.Data)
 	return bs
 }
 
@@ -64,9 +68,9 @@ func Decode(bs []byte) (Packet, error) {
 		return Packet{}, errors.New("数据异常: " + string(bs))
 	}
 	return Packet{
-		Code:    list[0][0],
-		Type:    list[0][1],
-		Address: string(list[0][2:]),
-		Body:    list[1],
+		Code: list[0][0],
+		Type: list[0][1],
+		Key:  string(list[0][2:]),
+		Data: list[1],
 	}, nil
 }
