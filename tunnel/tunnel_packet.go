@@ -3,13 +3,15 @@ package tunnel
 import (
 	"bytes"
 	"errors"
+	"fmt"
+	"github.com/injoyai/conv"
+	"strings"
 )
 
 const (
 	Write    = 'w' //写入数据
 	Open     = 'o' //建立连接,缩写和Close相同,固改成Open
 	Close    = 'c' //关闭连接
-	Info     = 'i' //信息
 	Register = 'r' //注册
 	Split    = '#' //分隔符
 
@@ -32,24 +34,69 @@ type Packet struct {
 	Data []byte `json:"data"`           //消息内容
 }
 
+func (this *Packet) Err() error {
+	return errors.New(string(this.Data))
+}
+
+func (this *Packet) String() string {
+	return fmt.Sprintf("[%s] 类型: %s, 结果: %s, 数据: %s",
+		this.Key,
+		func() string {
+			switch this.Type {
+			case Write:
+				return "写入数据"
+			case Open:
+				return "建立连接"
+			case Close:
+				return "关闭连接"
+			case Register:
+				return "注册代理"
+			default:
+				return "未知"
+			}
+		}(),
+		func() string {
+			ls := []string(nil)
+			ls = append(ls, conv.SelectString(this.IsRequest(), "请求", "响应"))
+			if this.IsRequest() {
+				ls = append(ls, conv.SelectString(this.NeedAck(), "需要确认", "无需确认"))
+			}
+			if this.IsResponse() {
+				ls = append(ls, conv.SelectString(this.Success(), "成功", "失败"))
+			}
+			return strings.Join(ls, "|")
+		}(),
+		this.Data,
+	)
+}
+
+func (this *Packet) Resp(code byte, data any) *Packet {
+	return &Packet{
+		Code: Response | code,
+		Type: this.Type,
+		Key:  this.Key,
+		Data: conv.Bytes(data),
+	}
+}
+
 // IsRequest 是否是请求数据
 func (this *Packet) IsRequest() bool {
-	return this.Code&0x80 == 0
+	return this.Code&0x80 == Request
 }
 
 // IsResponse 是否是响应数据
 func (this *Packet) IsResponse() bool {
-	return this.Code&0x80 == 0x80
+	return this.Code&0x80 == Response
 }
 
 // Success 是否成功,当为响应时生效
 func (this *Packet) Success() bool {
-	return this.Code&0x40 == 0
+	return this.Code&0x40 == Success
 }
 
 // NeedAck 是否需要确认,当为请求时生效
 func (this *Packet) NeedAck() bool {
-	return this.Code&0x20 == 0x20
+	return this.Code&0x20 == NeedAck
 }
 
 func (this *Packet) Bytes() []byte {
@@ -62,12 +109,12 @@ func (this *Packet) Bytes() []byte {
 	return bs
 }
 
-func Decode(bs []byte) (Packet, error) {
+func Decode(bs []byte) (*Packet, error) {
 	list := bytes.SplitN(bs, []byte{Split}, 2)
 	if len(list) == 1 || len(list[0]) < 2 {
-		return Packet{}, errors.New("数据异常: " + string(bs))
+		return nil, errors.New("数据异常: " + string(bs))
 	}
-	return Packet{
+	return &Packet{
 		Code: list[0][0],
 		Type: list[0][1],
 		Key:  string(list[0][2:]),

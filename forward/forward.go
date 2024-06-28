@@ -12,7 +12,7 @@ type Forward struct {
 }
 
 func (this *Forward) ListenTCP() error {
-	return core.Listen("tcp", this.Port, this.Handler)
+	return core.RunListen("tcp", this.Port, nil, this.Handler)
 }
 
 func (this *Forward) Handler(l net.Listener, c net.Conn) error {

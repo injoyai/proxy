@@ -25,7 +25,7 @@ func WithListenLog(l net.Listener) {
 	logs.Infof("[%s] 监听成功...\n", l.Addr().String())
 }
 
-func Listen(network string, port int, onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
+func RunListen(network string, port int, onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
 	listener, err := net.Listen(network, fmt.Sprintf(":%d", port))
 	if err != nil {
 		return err
@@ -43,6 +43,23 @@ func Listen(network string, port int, onListen func(net.Listener), onConnect fun
 			onConnect(l, c)
 		}(listener, c)
 	}
+}
+
+func GoListen(network string, port int, onConnect func(net.Listener, net.Conn) error) (net.Listener, error) {
+	listener, err := net.Listen(network, fmt.Sprintf(":%d", port))
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			c, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go onConnect(listener, c)
+		}
+	}()
+	return listener, nil
 }
 
 func CopyFunc(w io.Writer, r io.Reader, f func(bs []byte) ([]byte, error)) (rErr error, wErr error) {

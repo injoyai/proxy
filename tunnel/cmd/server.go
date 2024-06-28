@@ -4,6 +4,7 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/tunnel"
 	"net"
+	"time"
 )
 
 func init() {
@@ -14,7 +15,8 @@ func init() {
 func main() {
 
 	t := tunnel.Tunnel{
-		Port: 7000,
+		Port:    7000,
+		Timeout: time.Second * 2,
 		OnRegister: func(c net.Conn, r *tunnel.RegisterReq) error {
 			logs.Debug("注册信息: ", r)
 			return nil

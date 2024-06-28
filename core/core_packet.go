@@ -1,7 +1,6 @@
 package core
 
 import (
-	"bufio"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/logs"
 	"io"
@@ -20,19 +19,14 @@ func (this *Packet) Bytes() []byte {
 }
 
 func Write(c io.Writer, any interface{ Bytes() []byte }) (int, error) {
-	logs.Write(string(any.Bytes()))
+	logs.Write(any)
 	return c.Write((&Packet{
 		Data: any.Bytes(),
 	}).Bytes())
 }
 
 // Read 前2字节是定位标识,后面4字节是数据长度,后续是数据域
-func Read(r *bufio.Reader) (buf []byte, err error) {
-	defer func() {
-		if err != nil {
-			logs.Read(string(buf))
-		}
-	}()
+func Read(r io.Reader) (buf []byte, err error) {
 
 	for {
 
