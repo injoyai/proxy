@@ -58,32 +58,6 @@ func (this *Conn) newVirtual(key string) (v *core.Virtual) {
 	return v
 }
 
-func (this *Conn) Wait(p *Packet) (*Packet, error) {
-	this.c.SetWriteDeadline(time.Now().Add(this.timeout))
-	if _, err := this.WritePacket(p); err != nil {
-		return nil, err
-	}
-	this.c.SetWriteDeadline(time.Time{})
-	val, err := this.wait.Wait(p.Key, this.timeout)
-	if err != nil {
-		return nil, err
-	}
-	return val.(*Packet), nil
-}
-
-func (this *Conn) ReadPacket() (*Packet, error) {
-	bs, err := core.Read(this.buf)
-	if err != nil {
-		return nil, err
-	}
-	p, err := Decode(bs)
-	if err != nil {
-		return nil, err
-	}
-	logs.Read(p)
-	return p, nil
-}
-
 func (this *Conn) runRead(proxy string) error {
 	for {
 
@@ -141,6 +115,20 @@ func (this *Conn) runRead(proxy string) error {
 
 	}
 }
+
+func (this *Conn) ReadPacket() (*Packet, error) {
+	bs, err := core.Read(this.buf)
+	if err != nil {
+		return nil, err
+	}
+	p, err := Decode(bs)
+	if err != nil {
+		return nil, err
+	}
+	logs.Read(p)
+	return p, nil
+}
+
 func (this *Conn) WritePacket(p *Packet) (n int, err error) {
 	logs.Write(p)
 	pp := &core.Packet{Data: p.Bytes()}
