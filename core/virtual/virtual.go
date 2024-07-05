@@ -13,7 +13,7 @@ import (
 	"time"
 )
 
-func NewTCPDefault(r io.ReadWriteCloser) *Virtual {
+func NewTCPDefault(r io.ReadWriteCloser, f ...func(bs []byte)) *Virtual {
 	return New(r, DefaultFrame, func(p Packet) (io.ReadWriteCloser, string, error) {
 		c, err := net.Dial("tcp", string(p.GetData()))
 		if err != nil {
@@ -23,7 +23,7 @@ func NewTCPDefault(r io.ReadWriteCloser) *Virtual {
 	})
 }
 
-func New(r io.ReadWriteCloser, f Frame, open func(p Packet) (io.ReadWriteCloser, string, error)) *Virtual {
+func New(r io.ReadWriteCloser, f Frame, open func(p Packet) (io.ReadWriteCloser, string, error), register ...func(bs []byte) error) *Virtual {
 
 	v := &Virtual{
 		f:    f,
@@ -41,9 +41,29 @@ func New(r io.ReadWriteCloser, f Frame, open func(p Packet) (io.ReadWriteCloser,
 				return
 			}
 
+			//处理代理数据
 			data, err := func() (interface{}, error) {
 
 				switch p.GetType() {
+
+				case Register:
+
+					if p.IsRequest() {
+						for _, f := range register {
+							if err := f(p.GetData()); err != nil {
+								v.Close()
+								return nil, err
+							}
+						}
+
+					} else {
+						if p.Success() {
+							v.wait.Done(p.GetKey(), string(p.GetData()))
+						} else {
+							v.wait.Done(p.GetKey(), errors.New(string(p.GetData())))
+						}
+
+					}
 
 				case Read:
 
@@ -169,6 +189,18 @@ type Virtual struct {
 	r io.ReadWriteCloser
 	*maps.Safe
 	wait *wait.Entity
+}
+
+func (this *Virtual) Wait(key string) (interface{}, error) {
+	return this.wait.Wait(key)
+}
+
+func (this *Virtual) Close() error {
+	this.Safe.Range(func(key, value interface{}) bool {
+		value.(*IO).Close()
+		return true
+	})
+	return this.r.Close()
 }
 
 func (this *Virtual) WritePacket(k string, t byte, i interface{}) error {

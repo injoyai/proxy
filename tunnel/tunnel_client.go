@@ -5,6 +5,7 @@ import (
 	"github.com/injoyai/conv"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
+	"github.com/injoyai/proxy/core/virtual"
 	"net"
 	"time"
 )
@@ -28,6 +29,20 @@ func (this *Client) Dial() error {
 		return err
 	}
 	defer c.Close()
+
+	v := virtual.NewTCPDefault(c)
+
+	if err := v.WritePacket("register", Request|Register|NeedAck, conv.Bytes(RegisterReq{
+		Port:     this.Port,
+		Username: this.Username,
+		Password: this.Password,
+	})); err != nil {
+		return err
+	}
+
+	if _, err = v.Wait("register"); err != nil {
+		return err
+	}
 
 	tun := NewConn(c, this.Timeout)
 

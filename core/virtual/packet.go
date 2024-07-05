@@ -9,11 +9,11 @@ import (
 )
 
 const (
-	Read   = 0x00 //读取,能有效抑制源源不断地数据堆积在内存,当然性能会有所下降,多了一次IO
-	Write  = 0x01 //写入
-	Open   = 0x02 //打开
-	Close  = 0x03 //关闭
-	Listen = 0x04
+	Register = 0x00 //注册
+	Open     = 0x01 //打开
+	Close    = 0x02 //关闭
+	Read     = 0x03 //读取
+	Write    = 0x04 //写入
 
 	Request  = 0x00 //请求
 	Response = 0x80 //响应
@@ -83,16 +83,16 @@ func (this *packet) String() string {
 }
 
 func (this *packet) IsRequest() bool {
-	return this.Code&0x80 == 0x00
+	return this.Code&Response == 0x00
 }
 
 func (this *packet) Success() bool {
-	return this.Code&0x40 == 0x00
+	return this.Code&Fail == 0x00
 }
 
 // NeedAck 是否需要确认,当为请求时生效
 func (this *packet) NeedAck() bool {
-	return this.Code&0x20 == 0x20
+	return this.Code&NeedAck == NeedAck
 }
 
 func (this *packet) GetType() byte {
