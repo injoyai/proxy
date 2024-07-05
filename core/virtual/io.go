@@ -3,62 +3,70 @@ package virtual
 import (
 	"errors"
 	"fmt"
-	"github.com/injoyai/base/maps"
 	"github.com/injoyai/conv"
 	"io"
 	"sync/atomic"
 )
 
-func New(r io.ReadWriteCloser) *Virtual {
-	//按照固定协议去读取数据
-
-}
-
-type Virtual struct {
-	*maps.Safe
-}
-
-func (this *Virtual) Publish(key string, p []byte) error {
-	v, _ := this.Safe.GetOrSetByHandler(key, func() (interface{}, error) {
-		return &IO{}, nil
-	})
-	_, err := v.(*IO).Write(p)
-	return err
-}
-
 var _ io.ReadWriteCloser = (*IO)(nil)
+
+func NewIO(key string, w io.Writer, r *Buffer, onWrite func([]byte) ([]byte, error), onClose func(v *IO, err error) error) *IO {
+	return &IO{
+		Key:     key,
+		writer:  w,
+		reader:  r,
+		OnWrite: onWrite,
+		OnClose: onClose,
+	}
+}
 
 type IO struct {
 	Key     string                       //标识
 	writer  io.Writer                    //公共写入通道
 	reader  *Buffer                      //虚拟读取通道
+	err     error                        //错误信息
 	OnWrite func([]byte) ([]byte, error) //写入事件
 	OnClose func(v *IO, err error) error //关闭事件
 }
 
 func (this *IO) ToBuffer(p []byte) error {
+	if this.err != nil {
+		return this.err
+	}
 	_, err := this.reader.Write(p)
 	return err
 }
 
 func (this *IO) Read(p []byte) (n int, err error) {
+	if this.err != nil {
+		return 0, this.err
+	}
 	return this.reader.Read(p)
 }
 
 func (this *IO) Write(p []byte) (n int, err error) {
-	if this.reader.Closed() {
-		return 0, errors.New("closed")
+	if this.err != nil {
+		return 0, this.err
 	}
+	if this.reader.Closed() {
+		return 0, this.reader.err
+	}
+	n = len(p) //取原始的长度
 	if this.OnWrite != nil {
 		p, err = this.OnWrite(p)
 		if err != nil {
 			return 0, err
 		}
 	}
-	return this.writer.Write(p)
+	_, err = this.writer.Write(p)
+	return
 }
 
 func (this *IO) CloseWithErr(err error) error {
+	if err == nil {
+		return nil
+	}
+	this.err = err
 	if this.OnClose != nil {
 		return this.OnClose(this, err)
 	}
@@ -82,6 +90,7 @@ type Buffer struct {
 	C      chan []byte
 	cache  []byte
 	closed uint32
+	err    error
 }
 
 func (this *Buffer) Write(p []byte) (n int, err error) {
@@ -91,7 +100,7 @@ func (this *Buffer) Write(p []byte) (n int, err error) {
 		}
 	}()
 	if atomic.LoadUint32(&this.closed) == 1 {
-		return 0, errors.New("closed")
+		return 0, this.err
 	}
 	//当阻塞的时候,进行关闭操作,会panic
 	this.C <- p
@@ -100,14 +109,19 @@ func (this *Buffer) Write(p []byte) (n int, err error) {
 
 func (this *Buffer) Read(p []byte) (n int, err error) {
 	if atomic.LoadUint32(&this.closed) == 1 {
-		return 0, errors.New("closed")
+		return 0, this.err
 	}
 
 	if len(this.cache) == 0 {
 		bs, ok := <-this.C
 		if !ok {
-			atomic.StoreUint32(&this.closed, 1)
-			return 0, io.EOF
+			if atomic.CompareAndSwapUint32(&this.closed, 0, 1) {
+				if this.err == nil {
+					//手动关闭的,才会没有错误信息,则返回EOF
+					this.err = io.EOF
+				}
+			}
+			return 0, this.err
 		}
 		this.cache = bs
 	}
@@ -123,11 +137,19 @@ func (this *Buffer) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (this *Buffer) Close() error {
+func (this *Buffer) CloseWithErr(err error) error {
+	if err == nil {
+		return nil
+	}
 	if atomic.CompareAndSwapUint32(&this.closed, 0, 1) {
+		this.err = err
 		close(this.C)
 	}
 	return nil
+}
+
+func (this *Buffer) Close() error {
+	return this.CloseWithErr(io.EOF)
 }
 
 func (this *Buffer) Closed() bool {
