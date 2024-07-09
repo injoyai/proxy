@@ -54,10 +54,12 @@ type packet struct {
 }
 
 func (this *packet) String() string {
-	return fmt.Sprintf("[%s] 类型: %s, 结果: %s, 数据: %s",
+	return fmt.Sprintf("[%s] 类型: %s, 控制码: %s, 数据: %s",
 		this.Key,
 		func() string {
 			switch this.GetType() {
+			case Register:
+				return "注册"
 			case Write:
 				return "写入数据"
 			case Open:
@@ -96,7 +98,7 @@ func (this *packet) NeedAck() bool {
 }
 
 func (this *packet) GetType() byte {
-	return this.Code & 0x03
+	return this.Code & 0x0F
 }
 
 func (this *packet) Bytes() []byte {

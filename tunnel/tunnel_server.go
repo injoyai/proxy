@@ -4,15 +4,16 @@ import (
 	"encoding/json"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
+	"github.com/injoyai/proxy/core/virtual"
 	"net"
 	"time"
 )
 
 type Tunnel struct {
-	Port         int                                    //客户端连接的端口
-	OnRegister   func(c net.Conn, r *RegisterReq) error //注册事件
-	Timeout      time.Duration                          //超时时间
-	ProxyAddress string                                 //代理地址
+	Port         int                                            //客户端连接的端口
+	OnRegister   func(c net.Conn, r *virtual.RegisterReq) error //注册事件
+	Timeout      time.Duration                                  //超时时间
+	ProxyAddress string                                         //代理地址
 }
 
 func (this *Tunnel) ListenTCP() error {
@@ -21,64 +22,53 @@ func (this *Tunnel) ListenTCP() error {
 
 // Handler 对客户端进行注册验证操作
 func (this *Tunnel) Handler(tunListen net.Listener, c net.Conn) error {
-	defer c.Close()
 
-	tun := NewConn(c, this.Timeout)
+	var listener net.Listener
 
-	//读取注册数据
-	c.SetDeadline(time.Now().Add(this.Timeout))
-	p, err := tun.ReadPacket()
-	if err != nil {
-		return err
-	}
-	c.SetDeadline(time.Time{})
-
-	//解析注册数据
-	register := new(RegisterReq)
-	if err := json.Unmarshal(p.Data, register); err != nil {
-		return err
-	}
-
-	//注册事件
-	if this.OnRegister != nil {
-		if err := this.OnRegister(tun.c, register); err != nil {
-			logs.Errf("[%s] 注册失败: %s\n", tun.Key(), err.Error())
-			tun.WritePacket(p.Resp(Fail, err))
-			return err
-		}
-	}
-
-	{
-		l, err := this.handlerListen(register.Port, tun)
+	v := virtual.New(c, virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
+		//解析注册数据
+		register := new(virtual.RegisterReq)
+		err := json.Unmarshal(p.GetData(), register)
 		if err != nil {
-			logs.Errf("[%s] 监听端口[:%d]失败: %s\n", tun.Key(), register.Port, err.Error())
-			tun.WritePacket(p.Resp(Fail, err))
 			return err
 		}
-		logs.Infof("[:%d] 开始监听...\n", register.Port)
-		defer logs.Infof("[:%d] 关闭监听...\n", register.Port)
-		defer l.Close()
-	}
+		//注册事件
+		if this.OnRegister != nil {
+			if err := this.OnRegister(c, register); err != nil {
+				return err
+			}
+		}
+		{ //监听
+			listener, err = core.GoListen("tcp", register.Port, func(listener net.Listener, c net.Conn) (err error) {
+				defer c.Close()
+				return v.OpenAndSwap(this.ProxyAddress, c)
+			})
+			if err != nil {
+				logs.Errf("[%s] 监听端口[:%d]失败: %s\n", p.GetKey(), register.Port, err.Error())
+				return err
+			}
 
-	//响应注册成功
-	tun.WritePacket(p.Resp(Success, "注册成功"))
-	return tun.runRead(this.ProxyAddress)
+			logs.Infof("[:%d] 开始监听...\n", register.Port)
+
+		}
+		return nil
+	}))
+
+	defer func() {
+		c.Close()
+		v.Close()
+		if listener != nil {
+			listener.Close()
+			logs.Infof("[%s] 关闭监听...\n", listener.Addr().String())
+		}
+	}()
+
+	return v.Run()
 }
 
-func (this *Tunnel) handlerListen(port int, tun *Conn) (net.Listener, error) {
+func (this *Tunnel) handlerListen(port int, v *virtual.Virtual) (net.Listener, error) {
 	return core.GoListen("tcp", port, func(listener net.Listener, c net.Conn) (err error) {
-		return tun.Swap(c, func(tun *Conn, c net.Conn, key string) error {
-			logs.Tracef("[%s] 发起建立连接请求 \n", key)
-			//发起建立连接请求
-			if _, err := tun.WritePacket(&Packet{Type: Open, Key: key}); err != nil {
-				return err
-			}
-			logs.Tracef("[%s] 等待建立连接结果 \n", key)
-			//等待建立连接结果
-			if _, err := tun.wait.Wait(key, this.Timeout); err != nil {
-				return err
-			}
-			return nil
-		})
+		defer c.Close()
+		return v.OpenAndSwap("", c)
 	})
 }

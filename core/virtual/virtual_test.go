@@ -22,7 +22,7 @@ func TestNew(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			NewTCPDefault(tun)
+			NewTCPDefault(tun, ":10086")
 		}
 	}()
 
@@ -34,11 +34,11 @@ func TestNew(t *testing.T) {
 		return
 	}
 
-	v := NewTCPDefault(tun)
+	v := NewTCPDefault(tun, ":10086")
 
 	for {
 		<-time.After(time.Second)
-		c, err := v.Dial(":10086")
+		c, err := v.Open(":10086")
 		if err != nil {
 			t.Error(err)
 			continue
