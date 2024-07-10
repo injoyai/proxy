@@ -66,10 +66,3 @@ func (this *Tunnel) Handler(tunListen net.Listener, c net.Conn) error {
 
 	return v.Run()
 }
-
-func (this *Tunnel) handlerListen(port int, v *virtual.Virtual) (net.Listener, error) {
-	return core.GoListen("tcp", port, func(listener net.Listener, c net.Conn) (err error) {
-		defer c.Close()
-		return v.OpenAndSwap("", c)
-	})
-}

@@ -8,7 +8,7 @@ import (
 )
 
 // Swap 交换数据
-func Swap(c1, c2 io.ReadWriter) error {
+func Swap(c1, c2 io.ReadWriteCloser) error {
 	go io.Copy(c1, c2)
 	_, err := io.Copy(c2, c1)
 	return err
