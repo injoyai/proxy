@@ -52,7 +52,7 @@ func WithWait(timeout time.Duration) func(v *Virtual) {
 
 func WithRegister(f func(v *Virtual, p Packet) error) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.register = f
+		v.OnRegister = f
 	}
 }
 
@@ -80,14 +80,15 @@ func WithOpenTCP(address string) func(v *Virtual) {
 
 // Virtual 虚拟设备管理,收到的数据自动转发到对应的IO
 type Virtual struct {
-	f        Frame
-	r        io.ReadWriteCloser
-	IO       *maps.Safe
-	wait     *wait.Entity
-	open     func(p Packet) (io.ReadWriteCloser, string, error)
-	register func(v *Virtual, p Packet) error
-	done     chan struct{}
-	err      error
+	f    Frame
+	r    io.ReadWriteCloser
+	IO   *maps.Safe
+	wait *wait.Entity
+	done chan struct{}
+	err  error
+
+	open       func(p Packet) (io.ReadWriteCloser, string, error)
+	OnRegister func(v *Virtual, p Packet) error
 }
 
 func (this *Virtual) Wait(key string) (interface{}, error) {
@@ -104,14 +105,15 @@ func (this *Virtual) Close() error {
 
 // WritePacket 发送数据包到虚拟IO
 func (this *Virtual) WritePacket(k string, t byte, i interface{}) error {
-	p := this.f.NewPacket(k, t, i)
-	logs.Write(p)
+	p := this.NewPacket(k, t, i)
 	_, err := this.r.Write(p.Bytes())
 	return err
 }
 
 func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
-	return this.f.NewPacket(k, t, i)
+	p := this.f.NewPacket(k, t, i)
+	logs.Write(p)
+	return p
 }
 
 func (this *Virtual) Register(data interface{}) error {
@@ -137,13 +139,15 @@ func (this *Virtual) Open(address string) (io.ReadWriteCloser, error) {
 	return this.NewIO(val.(string)), nil
 }
 
-func (this *Virtual) OpenAndSwap(address string, c io.ReadWriter) error {
+func (this *Virtual) OpenAndSwap(address string, c io.ReadWriteCloser) error {
+	defer c.Close()
 	i, err := this.Open(address)
 	if err != nil {
 		return err
 	}
-	go io.Copy(i, c)
-	_, err = io.Copy(c, i)
+	defer i.Close()
+	go io.Copy(c, i)
+	_, err = io.Copy(i, c)
 	return err
 }
 
@@ -170,7 +174,6 @@ func (this *Virtual) NewIO(key string) *IO {
 	i := NewIO(key, this.r, NewBuffer(20),
 		func(bs []byte) ([]byte, error) {
 			p := this.NewPacket(key, Write, bs)
-			logs.Write(p)
 			return p.Bytes(), nil
 		}, func(v *IO, err error) error {
 			//go里面,IO的一方如果正常关闭,那么另一方读写的时候会收到io.EOF的错误
@@ -214,9 +217,9 @@ func (this *Virtual) Run() (err error) {
 			case Register:
 
 				if p.IsRequest() {
-					if this.register != nil {
-						if err := this.register(this, p); err != nil {
-							this.Close()
+					if this.OnRegister != nil {
+						if err := this.OnRegister(this, p); err != nil {
+							//this.Close()//关闭连接则无法发送错误信息
 							return nil, err
 						}
 					}
@@ -257,11 +260,9 @@ func (this *Virtual) Run() (err error) {
 			case Write:
 
 				if p.IsRequest() {
-					logs.Debug(p)
 					i := this.GetIO(p.GetKey())
 					if i != nil {
 						err = i.ToBuffer(p.GetData())
-						//n, err := i.Write(p.GetData())
 						return conv.Bytes(uint32(len(p.GetData()))), err
 					} else {
 						//当A还没意识到B已关闭,发送数据的话,会收到远程意外关闭连接的错误
@@ -296,14 +297,17 @@ func (this *Virtual) Run() (err error) {
 					//新建虚拟IO
 					i := this.NewIO(key)
 					go func() {
-						defer c.Close()
+						defer func() {
+							logs.Tracef("[%s] 关闭连接\n", key)
+							c.Close()
+							i.Close()
+						}()
+
 						go func() {
 							_, err := io.Copy(c, i)
-							logs.Err(err)
 							i.CloseWithErr(err)
 						}()
 						_, err := io.Copy(i, c)
-
 						i.CloseWithErr(err)
 					}()
 
@@ -323,13 +327,15 @@ func (this *Virtual) Run() (err error) {
 			case Close:
 
 				//当IO收到关闭信息试时候
-				i := this.GetIO(p.GetKey())
-				if i != nil {
-					errMsg := string(p.GetData())
-					if len(errMsg) == 0 {
-						errMsg = io.EOF.Error()
+				if p.IsRequest() {
+					i := this.GetIO(p.GetKey())
+					if i != nil {
+						errMsg := string(p.GetData())
+						if len(errMsg) == 0 {
+							errMsg = io.EOF.Error()
+						}
+						i.CloseWithErr(errors.New(errMsg))
 					}
-					i.CloseWithErr(errors.New(errMsg))
 				}
 
 			}
@@ -339,9 +345,11 @@ func (this *Virtual) Run() (err error) {
 
 		if p.IsRequest() && p.NeedAck() {
 			if err != nil {
-				this.WritePacket(p.GetKey(), p.GetType()|Response|Fail, err)
-			} else if p.NeedAck() {
-				this.WritePacket(p.GetKey(), p.GetType()|Response|Success, data)
+				err = this.WritePacket(p.GetKey(), p.GetType()|Response|Fail, err)
+				logs.PrintErr(err)
+			} else {
+				err = this.WritePacket(p.GetKey(), p.GetType()|Response|Success, data)
+				logs.PrintErr(err)
 			}
 		}
 

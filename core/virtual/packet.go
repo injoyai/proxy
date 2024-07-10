@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/injoyai/conv"
+	"github.com/injoyai/logs"
 	"io"
 	"strings"
 )
@@ -133,6 +134,7 @@ func (this *frame) NewPacket(k string, t byte, d interface{}) Packet {
 }
 
 func (this *frame) WritePacket(w io.Writer, p Packet) error {
+	logs.Write(p)
 	_, err := w.Write(p.Bytes())
 	return err
 }
@@ -142,7 +144,11 @@ func (this *frame) ReadPacket(r io.Reader) (Packet, error) {
 	if err != nil {
 		return nil, err
 	}
-	return this.Decode(bs)
+	p, err := this.Decode(bs)
+	if err != nil {
+		return nil, err
+	}
+	return p, nil
 }
 
 func (this *frame) Decode(bs []byte) (Packet, error) {
@@ -164,41 +170,41 @@ func (this *frame) Decode(bs []byte) (Packet, error) {
 }
 
 // Read 前2字节是定位标识,后面4字节是数据长度,后续是数据域,分包
-func (this *frame) Read(r io.Reader) (buf []byte, err error) {
+func (this *frame) Read(r io.Reader) ([]byte, error) {
 
 	for {
 
 		//校验标识字节0x8989
-		buf = make([]byte, 2)
-		n, err := r.Read(buf)
+		bufPrefix := make([]byte, 2)
+		n, err := r.Read(bufPrefix)
 		if err != nil {
-			return buf, err
+			return nil, err
 		}
-		if n != 2 && buf[0] == 0x89 && buf[1] == 0x89 {
+		if n != 2 || bufPrefix[0] != 0x89 || bufPrefix[1] != 0x89 {
 			continue
 		}
 
 		//获取数据域长度
-		buf = make([]byte, 4)
-		n, err = r.Read(buf)
+		bufLength := make([]byte, 4)
+		n, err = r.Read(bufLength)
 		if err != nil {
-			return buf, err
+			return nil, err
 		}
 		if n != 4 {
 			continue
 		}
-		length := conv.Int64(buf)
+		length := conv.Int64(bufLength)
 
 		//获取数据域
-		buf = make([]byte, length)
-		n, err = r.Read(buf)
+		bufData := make([]byte, length)
+		n, err = io.ReadAtLeast(r, bufData, int(length))
 		if err != nil {
-			return buf, err
+			return nil, err
 		}
 		if int64(n) != length {
 			continue
 		}
 
-		return buf, nil
+		return bufData, nil
 	}
 }

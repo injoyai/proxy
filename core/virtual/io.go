@@ -1,8 +1,8 @@
 package virtual
 
 import (
-	"errors"
 	"fmt"
+	"github.com/injoyai/base/safe"
 	"github.com/injoyai/conv"
 	"io"
 	"sync/atomic"
@@ -10,43 +10,54 @@ import (
 
 var _ io.ReadWriteCloser = (*IO)(nil)
 
+type OptionIO func(v *IO)
+
 func NewIO(key string, w io.Writer, r *Buffer, onWrite func([]byte) ([]byte, error), onClose func(v *IO, err error) error) *IO {
-	return &IO{
+	i := &IO{
 		Key:     key,
 		writer:  w,
 		reader:  r,
+		Closer:  safe.NewCloser(),
 		OnWrite: onWrite,
 		OnClose: onClose,
 	}
+	i.SetCloseFunc(func() error {
+		if i.OnClose != nil {
+			return i.OnClose(i, i.Err())
+		}
+		return i.reader.Close()
+	})
+	return i
 }
 
 type IO struct {
-	Key     string                       //标识
-	writer  io.Writer                    //公共写入通道
-	reader  *Buffer                      //虚拟读取通道
-	err     error                        //错误信息
-	OnWrite func([]byte) ([]byte, error) //写入事件
-	OnClose func(v *IO, err error) error //关闭事件
+	Key          string                       //标识
+	writer       io.Writer                    //公共写入通道
+	reader       *Buffer                      //虚拟读取通道
+	*safe.Closer                              //关闭通道
+	OnWrite      func([]byte) ([]byte, error) //写入事件
+	OnClose      func(v *IO, err error) error //关闭事件
 }
 
+// ToBuffer 写入数据到buffer,数据会流转到Read函数
 func (this *IO) ToBuffer(p []byte) error {
-	if this.err != nil {
-		return this.err
+	if this.Closed() {
+		return this.Err()
 	}
 	_, err := this.reader.Write(p)
 	return err
 }
 
 func (this *IO) Read(p []byte) (n int, err error) {
-	if this.err != nil {
-		return 0, this.err
+	if this.Closed() {
+		return 0, this.Err()
 	}
 	return this.reader.Read(p)
 }
 
 func (this *IO) Write(p []byte) (n int, err error) {
-	if this.err != nil {
-		return 0, this.err
+	if this.Closed() {
+		return 0, this.Err()
 	}
 	if this.reader.Closed() {
 		return 0, this.reader.err
@@ -57,24 +68,12 @@ func (this *IO) Write(p []byte) (n int, err error) {
 		if err != nil {
 			return 0, err
 		}
+		if p == nil {
+			return
+		}
 	}
 	_, err = this.writer.Write(p)
 	return
-}
-
-func (this *IO) CloseWithErr(err error) error {
-	if err == nil {
-		return nil
-	}
-	this.err = err
-	if this.OnClose != nil {
-		return this.OnClose(this, err)
-	}
-	return this.reader.Close()
-}
-
-func (this *IO) Close() error {
-	return this.CloseWithErr(errors.New("主动关闭"))
 }
 
 //================

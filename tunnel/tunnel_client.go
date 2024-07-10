@@ -38,7 +38,6 @@ func (this *Client) Dial() error {
 		Username: this.Username,
 		Password: this.Password,
 	}); err != nil {
-		logs.Trace("注册错误: ", err)
 		return err
 	}
 	logs.Trace("注册成功")
