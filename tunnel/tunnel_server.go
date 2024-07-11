@@ -41,7 +41,7 @@ func (this *Tunnel) Handler(tunListen net.Listener, c net.Conn) error {
 		{ //监听
 			listener, err = core.GoListen("tcp", register.Port, func(listener net.Listener, c net.Conn) (err error) {
 				logs.Tracef("[%s] 新的连接\n", c.RemoteAddr().String())
-				defer logs.Tracef("[%s] 关闭连接\n", c.RemoteAddr().String())
+				defer logs.Tracef("[%s] 关闭连接: %v\n", c.RemoteAddr().String(), err)
 				return v.OpenAndSwap(this.ProxyAddress, c)
 			})
 			if err != nil {

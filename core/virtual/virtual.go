@@ -148,6 +148,7 @@ func (this *Virtual) OpenAndSwap(address string, c io.ReadWriteCloser) error {
 	defer i.Close()
 	go io.Copy(c, i)
 	_, err = io.Copy(i, c)
+	logs.PrintErr(err)
 	return err
 }
 

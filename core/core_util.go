@@ -9,16 +9,11 @@ import (
 
 // Swap 交换数据
 func Swap(c1, c2 io.ReadWriteCloser) error {
+	defer c1.Close()
+	defer c2.Close()
 	go io.Copy(c1, c2)
 	_, err := io.Copy(c2, c1)
 	return err
-}
-
-// SwapClose 交换数据并关闭
-func SwapClose(c1, c2 io.ReadWriteCloser) error {
-	defer c1.Close()
-	defer c2.Close()
-	return Swap(c1, c2)
 }
 
 func WithListenLog(l net.Listener) {
@@ -60,28 +55,6 @@ func GoListen(network string, port int, onConnect func(net.Listener, net.Conn) e
 		}
 	}()
 	return listener, nil
-}
-
-func CopyFunc(w io.Writer, r io.Reader, f func(bs []byte) ([]byte, error)) (rErr error, wErr error) {
-	size := 32 * 1024
-	buf := make([]byte, size)
-	for {
-		n, err := r.Read(buf)
-		if err != nil {
-			return err, nil
-		}
-		bs, err := f(buf[:n])
-		if err != nil {
-			return err, nil
-		}
-		if len(bs) == 0 {
-			continue
-		}
-		_, err = w.Write(bs)
-		if err != nil {
-			return nil, err
-		}
-	}
 }
 
 type CoverWriter struct {
