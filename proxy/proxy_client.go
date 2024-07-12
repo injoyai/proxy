@@ -1,4 +1,4 @@
-package tunnel
+package proxy
 
 import (
 	"github.com/injoyai/logs"
@@ -8,12 +8,12 @@ import (
 )
 
 type Client struct {
-	Address      string        //服务地址
-	Port         int           //监听端口
-	ProxyAddress string        //代理地址
-	Username     string        //用户名
-	Password     string        //密码
-	Timeout      time.Duration //超时时间
+	Address  string        //服务地址
+	Proxy    string        //代理地址
+	Port     int           //监听端口
+	Username string        //用户名
+	Password string        //密码
+	Timeout  time.Duration //超时时间
 }
 
 func (this *Client) Dial() error {
@@ -28,7 +28,7 @@ func (this *Client) Dial() error {
 	defer c.Close()
 
 	//虚拟设备管理
-	v := virtual.NewTCPDefault(c, this.ProxyAddress)
+	v := virtual.NewTCPDefault(c, this.Proxy)
 	defer v.Close()
 
 	go v.Run()

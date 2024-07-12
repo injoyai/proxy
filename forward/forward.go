@@ -7,11 +7,13 @@ import (
 )
 
 type Forward struct {
-	Port    int
-	Address string
+	Port    int    //监听端口
+	Address string //转发地址
 }
 
 func (this *Forward) ListenTCP() error {
+	logs.Infof("[:%d] 开始监听...\n", this.Port)
+	defer logs.Infof("[:%d] 关闭监听...\n", this.Port)
 	return core.RunListen("tcp", this.Port, nil, this.Handler)
 }
 
