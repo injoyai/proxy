@@ -9,15 +9,13 @@ import (
 	"github.com/injoyai/goutil/g"
 	"github.com/injoyai/logs"
 	"io"
-	"net"
 	"time"
 )
 
 type Option func(v *Virtual)
 
-func NewTCPDefault(r io.ReadWriteCloser, address string, option ...Option) *Virtual {
+func NewTCPDefault(r io.ReadWriteCloser, option ...Option) *Virtual {
 	return New(r, func(v *Virtual) {
-		WithOpenTCP(address)(v)
 		for _, f := range option {
 			f(v)
 		}
@@ -29,7 +27,7 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 		f:    DefaultFrame,
 		r:    r,
 		IO:   maps.NewSafe(),
-		wait: wait.New(time.Second * 5),
+		Wait: wait.New(time.Second * 5),
 		done: make(chan struct{}),
 	}
 	for _, op := range option {
@@ -46,36 +44,43 @@ func WithFrame(f Frame) func(v *Virtual) {
 
 func WithWait(timeout time.Duration) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.wait = wait.New(timeout)
+		v.Wait = wait.New(timeout)
 	}
 }
 
+// WithRegister 当客户端进行注册,处理校验客户端的信息
 func WithRegister(f func(v *Virtual, p Packet) error) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.OnRegister = f
 	}
 }
 
-func WithRegisterPrint(f func(v *Virtual, p Packet) error) func(v *Virtual) {
-	return WithRegister(func(v *Virtual, p Packet) error {
-		logs.Debug("注册数据: ", p)
-		return nil
-	})
+func WithOpen(f func(p Packet) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
+	if f == nil {
+		return WithOpenPacket()
+	}
+	return func(v *Virtual) { v.open = f }
 }
 
-func WithOpenTCP(address string) func(v *Virtual) {
+func WithOpenProxy(proxy *Proxy) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.open = func(p Packet) (io.ReadWriteCloser, string, error) {
-			if len(address) == 0 {
-				address = string(p.GetData())
-			}
-			c, err := net.Dial("tcp", address)
-			if err != nil {
-				return nil, "", err
-			}
-			return c, c.LocalAddr().String(), nil
+			return proxy.Dial()
 		}
 	}
+}
+
+func WithOpenPacket() func(v *Virtual) {
+	return WithOpen(func(p Packet) (io.ReadWriteCloser, string, error) {
+		m := conv.NewMap(p.GetData())
+		proxy := &Proxy{
+			Type:    m.GetString("type", "tcp"),
+			Address: m.GetString("address"),
+			Timeout: m.GetDuration("timeout"),
+			Param:   m.GMap(),
+		}
+		return proxy.Dial()
+	})
 }
 
 // Virtual 虚拟设备管理,收到的数据自动转发到对应的IO
@@ -83,7 +88,7 @@ type Virtual struct {
 	f    Frame
 	r    io.ReadWriteCloser
 	IO   *maps.Safe
-	wait *wait.Entity
+	Wait *wait.Entity
 	done chan struct{}
 	err  error
 
@@ -91,8 +96,10 @@ type Virtual struct {
 	OnRegister func(v *Virtual, p Packet) error
 }
 
-func (this *Virtual) Wait(key string) (interface{}, error) {
-	return this.wait.Wait(key)
+func (this *Virtual) SetOption(op ...Option) {
+	for _, f := range op {
+		f(this)
+	}
 }
 
 func (this *Virtual) Close() error {
@@ -120,18 +127,18 @@ func (this *Virtual) Register(data interface{}) error {
 	if err := this.WritePacket("register", Request|Register|NeedAck, data); err != nil {
 		return err
 	}
-	if _, err := this.Wait("register"); err != nil {
+	if _, err := this.Wait.Wait("register"); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (this *Virtual) Open(address string) (io.ReadWriteCloser, error) {
+func (this *Virtual) Open(p *Proxy) (io.ReadWriteCloser, error) {
 	tempKey := g.UUID() //临时key
-	if err := this.WritePacket(tempKey, Open|Request|NeedAck, address); err != nil {
+	if err := this.WritePacket(tempKey, Open|Request|NeedAck, p); err != nil {
 		return nil, err
 	}
-	val, err := this.wait.Wait(tempKey)
+	val, err := this.Wait.Wait(tempKey)
 	if err != nil {
 		return nil, err
 	}
@@ -139,9 +146,9 @@ func (this *Virtual) Open(address string) (io.ReadWriteCloser, error) {
 	return this.NewIO(val.(string)), nil
 }
 
-func (this *Virtual) OpenAndSwap(address string, c io.ReadWriteCloser) error {
+func (this *Virtual) OpenAndSwap(p *Proxy, c io.ReadWriteCloser) error {
 	defer c.Close()
-	i, err := this.Open(address)
+	i, err := this.Open(p)
 	if err != nil {
 		return err
 	}
@@ -227,9 +234,9 @@ func (this *Virtual) Run() (err error) {
 
 				} else {
 					if p.Success() {
-						this.wait.Done(p.GetKey(), string(p.GetData()))
+						this.Wait.Done(p.GetKey(), string(p.GetData()))
 					} else {
-						this.wait.Done(p.GetKey(), errors.New(string(p.GetData())))
+						this.Wait.Done(p.GetKey(), errors.New(string(p.GetData())))
 					}
 
 				}
@@ -272,9 +279,9 @@ func (this *Virtual) Run() (err error) {
 
 				} else {
 					if p.Success() {
-						this.wait.Done(p.GetKey()+".read", conv.Uint32(p.GetData()))
+						this.Wait.Done(p.GetKey()+".read", conv.Uint32(p.GetData()))
 					} else {
-						this.wait.Done(p.GetKey()+".write", errors.New(string(p.GetData())))
+						this.Wait.Done(p.GetKey()+".write", errors.New(string(p.GetData())))
 					}
 
 				}
@@ -318,9 +325,9 @@ func (this *Virtual) Run() (err error) {
 				} else {
 					//响应
 					if p.Success() {
-						this.wait.Done(p.GetKey(), string(p.GetData()))
+						this.Wait.Done(p.GetKey(), string(p.GetData()))
 					} else {
-						this.wait.Done(p.GetKey(), errors.New(string(p.GetData())))
+						this.Wait.Done(p.GetKey(), errors.New(string(p.GetData())))
 					}
 
 				}

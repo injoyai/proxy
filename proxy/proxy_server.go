@@ -12,11 +12,10 @@ import (
 )
 
 type Server struct {
-	Port       int                                                    //客户端连接的端口
-	Timeout    time.Duration                                          //超时时间
-	Proxy      string                                                 //代理地址
-	OnRegister func(c net.Conn, r *virtual.RegisterReq) error         //注册事件
-	OnProxy    func(c net.Conn, proxy string) ([]byte, string, error) //代理事件
+	Port       int                                              //客户端连接的端口
+	Timeout    time.Duration                                    //超时时间
+	OnRegister func(c net.Conn, r *virtual.RegisterReq) error   //注册事件
+	OnProxy    func(c net.Conn) (*virtual.Proxy, []byte, error) //代理事件
 }
 
 func (this *Server) ListenTCP() error {
@@ -46,9 +45,9 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 				logs.Tracef("[%s] 新的连接\n", c.RemoteAddr().String())
 				defer logs.Tracef("[%s] 关闭连接: %v\n", c.RemoteAddr().String(), err)
 
-				//使用自定义代理
+				//使用自定义(服务端)代理
 				if this.OnProxy != nil {
-					prefix, proxy, err := this.OnProxy(c, this.Proxy)
+					proxy, prefix, err := this.OnProxy(c)
 					if err != nil {
 						return err
 					}
@@ -61,8 +60,8 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 					})
 				}
 
-				//使用默认代理
-				return v.OpenAndSwap(this.Proxy, c)
+				//使用默认(客户端)代理
+				return v.OpenAndSwap(&virtual.Proxy{}, c)
 			})
 			if err != nil {
 				logs.Errf("[%s] 监听端口[:%d]失败: %s\n", p.GetKey(), register.Port, err.Error())

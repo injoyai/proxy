@@ -3,41 +3,39 @@ package proxy
 import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core/virtual"
+	"io"
 	"net"
 	"time"
 )
 
 type Client struct {
-	Address  string        //服务地址
-	Proxy    string        //代理地址
-	Port     int           //监听端口
-	Username string        //用户名
-	Password string        //密码
-	Timeout  time.Duration //超时时间
+	Address  string                                                     //连接服务地址
+	Timeout  time.Duration                                              //连接诶服务超时时间
+	Register virtual.RegisterReq                                        //注册配置
+	OnOpen   func(p virtual.Packet) (io.ReadWriteCloser, string, error) //打开连接事件
 }
 
-func (this *Client) Dial() error {
+func (this *Client) DialTCP(op ...virtual.Option) error {
 	if this.Timeout <= 0 {
 		this.Timeout = time.Second * 2
 	}
 
+	//连接到服务端
 	c, err := net.DialTimeout("tcp", this.Address, this.Timeout)
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
-	//虚拟设备管理
-	v := virtual.NewTCPDefault(c, this.Proxy)
+	//虚拟设备管理,默认使用服务的代理配置代理
+	v := virtual.New(c, virtual.WithOpen(this.OnOpen))
+	v.SetOption(op...)
 	defer v.Close()
 
 	go v.Run()
 
-	if err := v.Register(virtual.RegisterReq{
-		Port:     this.Port,
-		Username: this.Username,
-		Password: this.Password,
-	}); err != nil {
+	//注册到服务
+	if err := v.Register(this.Register); err != nil {
 		return err
 	}
 	logs.Trace("注册成功")

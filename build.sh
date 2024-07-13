@@ -1,25 +1,25 @@
 name="proxy"
 
-GOOS=linux GOARCH=amd64 go build -v -ldflags="-w -s" -o ./bin/linux/$name ./cmd/main.go
+GOOS=linux GOARCH=amd64 go build -v -ldflags="-w -s" -o ./bin/amd64/$name ./cmd/main.go
 echo "Linux编译完成..."
 echo "开始压缩..."
-upx -9 -k "./bin/linux/$name"
-if [ -f "./bin/linux/$name.~" ]; then
-  rm "./bin/linux/$name.~"
+upx -9 -k "./bin/amd64/$name"
+if [ -f "./bin/amd64/$name.~" ]; then
+  rm "./bin/amd64/$name.~"
 fi
-if [ -f "./bin/linux/$name.000" ]; then
-  rm "./bin/linux/$name.000"
+if [ -f "./bin/amd64/$name.000" ]; then
+  rm "./bin/amd64/$name.000"
 fi
 
-GOOS=linux GOARCH=arm GOARM=7 go build -v -ldflags="-w -s" -o ./bin/ubuntu/$name ./cmd/main.go
+GOOS=linux GOARCH=arm GOARM=7 go build -v -ldflags="-w -s" -o ./bin/arm/$name ./cmd/main.go
 echo "Ubuntu编译完成..."
 echo "开始压缩..."
-upx -9 -k "./bin/ubuntu/$name"
-if [ -f "./bin/ubuntu/$name.~" ]; then
-  rm "./bin/ubuntu/$name.~"
+upx -9 -k "./bin/arm/$name"
+if [ -f "./bin/arm/$name.~" ]; then
+  rm "./bin/arm/$name.~"
 fi
-if [ -f "./bin/ubuntu/$name.000" ]; then
-  rm "./bin/ubuntu/$name.000"
+if [ -f "./bin/arm/$name.000" ]; then
+  rm "./bin/arm/$name.000"
 fi
 
 GOOS=windows GOARCH=amd64 go build -v -ldflags="-w -s" -o ./bin/windows/$name.exe ./cmd/main.go

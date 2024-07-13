@@ -3,12 +3,14 @@ package main
 import (
 	"fmt"
 	"github.com/injoyai/conv/cfg/v2"
+	"github.com/injoyai/goutil/other/command"
 	"github.com/injoyai/goutil/script"
 	"github.com/injoyai/goutil/script/js"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/forward"
 	. "github.com/injoyai/proxy/proxy"
+	"io"
 	"net"
 	"os"
 	"strings"
@@ -31,14 +33,14 @@ func main() {
 
 	//初始化配置信息,优先获取flag,然后尝试从配置文件获取
 	cfg.Init(
-		cfg.WithFlag(
-			&cfg.Flag{Name: "port", Usage: "监听端口"},
-			&cfg.Flag{Name: "address", Usage: "服务地址(代理)"},
-			&cfg.Flag{Name: "proxy", Usage: "代理地址"},
-			&cfg.Flag{Name: "timeout", Usage: "超时时间"},
-			&cfg.Flag{Name: "username", Usage: "用户名"},
-			&cfg.Flag{Name: "password", Usage: "密码"},
-			&cfg.Flag{Name: "log.level", Usage: "日志等级"},
+		command.WithFlags(
+			&command.Flag{Name: "port", Memo: "监听端口"},
+			&command.Flag{Name: "address", Memo: "服务地址(代理)"},
+			&command.Flag{Name: "proxy", Memo: "代理地址"},
+			&command.Flag{Name: "timeout", Memo: "超时时间"},
+			&command.Flag{Name: "username", Memo: "用户名"},
+			&command.Flag{Name: "password", Memo: "密码"},
+			&command.Flag{Name: "log.level", Memo: "日志等级"},
 		),
 		cfg.WithYaml("./config/config.yaml"),
 	)
@@ -84,10 +86,10 @@ func main() {
 	onRegister := cfg.GetString("onRegister")
 
 	help := `
-使用
-    forward [flags] 		转发模式(本地代理)		
-    proxy client [flags]  	代理客户端			
-    proxy server [flags]  	代理服务端			
+使用 注意Flags在前
+    [flags] forward			转发模式(本地代理)		
+    [flags] proxy client   	代理客户端			
+    [flags] proxy server   	代理服务端			
 
 Flags
     --proxy 	string		代理地址(默认127.0.0.1:10001)	
@@ -122,20 +124,35 @@ Flags
 		switch os.Args[2] {
 		case "client":
 			t := Client{
-				Address:  address,
-				Proxy:    proxy,
-				Port:     port,
-				Username: username,
-				Password: password,
-				Timeout:  timeout,
+				Address: address,
+				Timeout: timeout,
+				OnOpen: func(p virtual.Packet) (io.ReadWriteCloser, string, error) {
+					_proxy := &virtual.Proxy{
+						Type:    "tcp",
+						Address: proxy,
+						Timeout: timeout,
+					}
+					return _proxy.Dial()
+				},
+				Register: virtual.RegisterReq{
+					Port:     port,
+					Username: username,
+					Password: password,
+					Param:    nil,
+				},
 			}
-			logs.Err(t.Dial())
+			logs.Err(t.DialTCP())
 
 		case "server":
 			t := Server{
 				Port:    port,
 				Timeout: timeout,
-				Proxy:   proxy,
+				OnProxy: func(c net.Conn) (*virtual.Proxy, []byte, error) {
+					return &virtual.Proxy{
+						Type:    "tcp",
+						Address: proxy,
+					}, nil, nil
+				},
 				OnRegister: func(c net.Conn, r *virtual.RegisterReq) error {
 					_, err := Script.Exec(onRegister, func(i script.Client) {
 						i.Set("username", r.Username)

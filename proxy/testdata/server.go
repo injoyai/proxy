@@ -18,7 +18,14 @@ func main() {
 	t := proxy.Server{
 		Port:    7000,
 		Timeout: time.Second * 2,
-		Proxy:   "192.168.10.24:10001",
+		OnProxy: func(c net.Conn) (*virtual.Proxy, []byte, error) {
+			return &virtual.Proxy{
+				Type:    "tcp",
+				Address: "192.168.10.24:10001",
+				Timeout: 0,
+			}, nil, nil
+
+		},
 		OnRegister: func(c net.Conn, r *virtual.RegisterReq) error {
 			logs.Debug("注册信息: ", r)
 			return nil

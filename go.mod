@@ -5,7 +5,7 @@ go 1.20
 require (
 	github.com/injoyai/base v1.0.12
 	github.com/injoyai/conv v1.1.7
-	github.com/injoyai/goutil v0.0.0-20240701034625-f893fe9f5fb8
+	github.com/injoyai/goutil v0.0.0-20240712153111-79e77890c723
 	github.com/injoyai/logs v1.0.7
 )
 
@@ -20,6 +20,7 @@ require (
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // indirect
 	github.com/goburrow/serial v0.1.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
+	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/injoyai/io v0.1.8 // indirect
 	github.com/jmespath/go-jmespath v0.3.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
@@ -32,6 +33,8 @@ require (
 	github.com/pelletier/go-toml/v2 v2.1.1 // indirect
 	github.com/robertkrimen/otto v0.2.1 // indirect
 	github.com/satori/go.uuid v1.2.0 // indirect
+	github.com/spf13/cobra v1.2.1 // indirect
+	github.com/spf13/pflag v1.0.5 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/common v1.0.667 // indirect
 	github.com/tencentcloud/tencentcloud-sdk-go/tencentcloud/sms v1.0.667 // indirect
 	go.bug.st/serial v1.5.0 // indirect
