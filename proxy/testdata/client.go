@@ -10,6 +10,7 @@ import (
 
 func init() {
 	//logs.SetFormatterWithTime()
+	//logs.SetLevel(logs.LevelInfo)
 	logs.SetWriter(logs.Stdout)
 }
 
