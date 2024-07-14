@@ -16,7 +16,7 @@ func init() {
 func main() {
 	for {
 		t := proxy.Client{
-			Dial: core.Dial{
+			Dial: &core.Dial{
 				Address: "127.0.0.1:7000",
 				Timeout: time.Second * 2,
 			},
@@ -26,7 +26,7 @@ func main() {
 				Password: "password",
 			},
 		}
-		logs.Err(t.RunTCP())
+		logs.Err(t.DialTCP())
 		<-time.After(time.Second * 5)
 	}
 }

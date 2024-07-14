@@ -115,8 +115,8 @@ Flags
 
 	case "forward":
 		p := forward.Forward{
-			Listen: core.Listen{Port: conv.String(port)},
-			Forward: core.Dial{
+			Listen: &core.Listen{Port: conv.String(port)},
+			Forward: &core.Dial{
 				Address: proxy,
 			},
 		}
@@ -127,20 +127,19 @@ Flags
 		switch os.Args[2] {
 		case "client":
 			t := Client{
-				Dial: core.Dial{
+				Dial: &core.Dial{
 					Type:    "tcp",
 					Address: address,
 					Timeout: timeout,
-					Param:   nil,
 				},
-				Register: virtual.RegisterReq{
+				Register: &virtual.RegisterReq{
 					Port:     port,
 					Username: username,
 					Password: password,
 					Param:    nil,
 				},
 			}
-			logs.Err(t.RunTCP(virtual.WithOpenDial(&core.Dial{
+			logs.Err(t.DialTCP(virtual.WithOpenCustom(&core.Dial{
 				Type:    "tcp",
 				Address: proxy,
 				Timeout: timeout,
@@ -148,7 +147,7 @@ Flags
 
 		case "server":
 			t := Server{
-				Listen: core.Listen{Port: conv.String(port)},
+				Listen: &core.Listen{Port: conv.String(port)},
 				OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
 					return &core.Dial{
 						Type:    "tcp",

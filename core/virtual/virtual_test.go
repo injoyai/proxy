@@ -1,6 +1,7 @@
 package virtual
 
 import (
+	"github.com/injoyai/proxy/core"
 	"net"
 	"testing"
 	"time"
@@ -22,7 +23,7 @@ func TestNew(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			NewTCPDefault(tun, ":10086")
+			New(tun, WithOpenTCP(":10086"))
 		}
 	}()
 
@@ -34,11 +35,11 @@ func TestNew(t *testing.T) {
 		return
 	}
 
-	v := NewTCPDefault(tun, ":10086")
+	v := New(tun, WithOpenTCP(":10086"))
 
 	for {
 		<-time.After(time.Second)
-		c, err := v.Open(":10086")
+		c, err := v.Open(&core.Dial{Address: ":10086"})
 		if err != nil {
 			t.Error(err)
 			continue

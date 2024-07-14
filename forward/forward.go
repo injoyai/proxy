@@ -7,8 +7,8 @@ import (
 )
 
 type Forward struct {
-	Listen  core.Listen //监听配置
-	Forward core.Dial   //转发配置
+	Listen  *core.Listen //监听配置
+	Forward *core.Dial   //转发配置
 }
 
 func (this *Forward) ListenTCP() error {

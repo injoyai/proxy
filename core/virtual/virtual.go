@@ -16,14 +16,6 @@ import (
 
 type Option func(v *Virtual)
 
-func NewTCPDefault(r io.ReadWriteCloser, option ...Option) *Virtual {
-	return New(r, func(v *Virtual) {
-		for _, f := range option {
-			f(v)
-		}
-	})
-}
-
 func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 	v := &Virtual{
 		f:      DefaultFrame,
@@ -40,7 +32,7 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 		return v.r.Close()
 	})
 	//默认使用远程的代理配置
-	WithOpenPacket()(v)
+	WithOpenRemote()(v)
 	//自定义选项
 	for _, op := range option {
 		op(v)
@@ -67,31 +59,33 @@ func WithRegister(f func(v *Virtual, p Packet) error) func(v *Virtual) {
 	}
 }
 
-func WithOpen(f func(p Packet) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
+func WithOpen(f func(p *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
 	if f == nil {
-		return WithOpenPacket()
+		return WithOpenRemote()
 	}
 	return func(v *Virtual) { v.open = f }
 }
 
-func WithOpenDial(proxy *core.Dial) func(v *Virtual) {
+func WithOpenTCP(address string) func(v *Virtual) {
+	return WithOpenCustom(&core.Dial{
+		Type:    "tcp",
+		Address: address,
+	})
+}
+
+// WithOpenCustom 使用自定义代理配置进行代理,忽略服务端的配置
+func WithOpenCustom(proxy *core.Dial) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.open = func(p Packet) (io.ReadWriteCloser, string, error) {
+		v.open = func(p *core.Dial) (io.ReadWriteCloser, string, error) {
 			return proxy.Dial()
 		}
 	}
 }
 
-func WithOpenPacket() func(v *Virtual) {
-	return WithOpen(func(p Packet) (io.ReadWriteCloser, string, error) {
-		m := conv.NewMap(p.GetData())
-		proxy := &core.Dial{
-			Type:    m.GetString("type", "tcp"),
-			Address: m.GetString("address"),
-			Timeout: m.GetDuration("timeout"),
-			Param:   m.GMap(),
-		}
-		return proxy.Dial()
+// WithOpenRemote 使用服务端的代理配置进行代理
+func WithOpenRemote() func(v *Virtual) {
+	return WithOpen(func(p *core.Dial) (io.ReadWriteCloser, string, error) {
+		return p.Dial()
 	})
 }
 
@@ -103,7 +97,7 @@ type Virtual struct {
 	Wait *wait.Entity
 	*safe.Closer
 
-	open       func(p Packet) (io.ReadWriteCloser, string, error)
+	open       func(p *core.Dial) (io.ReadWriteCloser, string, error)
 	OnRegister func(v *Virtual, p Packet) error
 }
 
@@ -208,7 +202,6 @@ func (this *Virtual) Run() (err error) {
 			return err
 		}
 		logs.Read(p)
-		logs.Read(p)
 
 		//处理代理数据
 		data, err := func() (interface{}, error) {
@@ -285,7 +278,17 @@ func (this *Virtual) Run() (err error) {
 					if this.open == nil {
 						return nil, errors.New("open is nil")
 					}
-					c, key, err := this.open(p)
+					m := conv.NewMap(p.GetData())
+					gm := m.GMap()
+					delete(gm, "type")
+					delete(gm, "address")
+					delete(gm, "timeout")
+					c, key, err := this.open(&core.Dial{
+						Type:    m.GetString("type", "tcp"),
+						Address: m.GetString("address"),
+						Timeout: m.GetDuration("timeout"),
+						Param:   gm,
+					})
 					if err != nil {
 						return nil, err
 					}

@@ -3,12 +3,22 @@ package core
 import (
 	"fmt"
 	"github.com/injoyai/goutil/g"
-	"github.com/injoyai/logs"
 	"io"
 	"net"
 	"strings"
 	"time"
 )
+
+func NewDialTCP(address string, timeout ...time.Duration) *Dial {
+	d := &Dial{
+		Type:    "tcp",
+		Address: address,
+	}
+	if len(timeout) > 0 {
+		d.Timeout = timeout[0]
+	}
+	return d
+}
 
 type Dial struct {
 	Type    string        `json:"type"`    //连接类型,TCP,UDP,Websocket,Serial...
@@ -21,7 +31,7 @@ func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
 	//if this.Timeout==0{
 	//	this.Timeout=10*time.Second
 	//}
-	logs.Debug(this.Address)
+
 	switch strings.ToLower(this.Type) {
 	case "tcp":
 		c, err := net.DialTimeout(this.Type, this.Address, this.Timeout)

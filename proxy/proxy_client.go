@@ -7,11 +7,11 @@ import (
 )
 
 type Client struct {
-	Dial     core.Dial           //连接配置
+	Dial     *core.Dial          //连接配置
 	Register virtual.RegisterReq //注册配置
 }
 
-func (this *Client) RunTCP(op ...virtual.Option) error {
+func (this *Client) DialTCP(op ...virtual.Option) error {
 	//连接到服务端
 	c, _, err := this.Dial.Dial()
 	if err != nil {
@@ -29,7 +29,7 @@ func (this *Client) RunTCP(op ...virtual.Option) error {
 	if err := v.Register(this.Register); err != nil {
 		return err
 	}
-	logs.Trace("注册成功")
+	logs.Infof("[%s] 注册成功\n", this.Dial.Address)
 
 	<-v.Done()
 	return v.Err()

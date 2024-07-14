@@ -11,7 +11,7 @@ import (
 )
 
 type Server struct {
-	Listen     core.Listen                                    //监听配置
+	Listen     *core.Listen                                   //监听配置
 	OnRegister func(c net.Conn, r *virtual.RegisterReq) error //注册事件
 	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)   //代理事件
 }
