@@ -124,10 +124,14 @@ Flags
 		switch os.Args[2] {
 		case "client":
 			t := Client{
-				Address: address,
-				Timeout: timeout,
+				Dial: virtual.Dial{
+					Type:    "tcp",
+					Address: address,
+					Timeout: timeout,
+					Param:   nil,
+				},
 				OnOpen: func(p virtual.Packet) (io.ReadWriteCloser, string, error) {
-					_proxy := &virtual.Proxy{
+					_proxy := &virtual.Dial{
 						Type:    "tcp",
 						Address: proxy,
 						Timeout: timeout,
@@ -141,14 +145,14 @@ Flags
 					Param:    nil,
 				},
 			}
-			logs.Err(t.DialTCP())
+			logs.Err(t.RunTCP())
 
 		case "server":
 			t := Server{
 				Port:    port,
 				Timeout: timeout,
-				OnProxy: func(c net.Conn) (*virtual.Proxy, []byte, error) {
-					return &virtual.Proxy{
+				OnProxy: func(c net.Conn) (*virtual.Dial, []byte, error) {
+					return &virtual.Dial{
 						Type:    "tcp",
 						Address: proxy,
 					}, nil, nil

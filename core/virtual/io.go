@@ -21,7 +21,7 @@ func NewIO(key string, w io.Writer, r *Buffer, onWrite func([]byte) ([]byte, err
 		OnWrite: onWrite,
 		OnClose: onClose,
 	}
-	i.SetCloseFunc(func() error {
+	i.SetCloseFunc(func(error) error {
 		if i.OnClose != nil {
 			return i.OnClose(i, i.Err())
 		}

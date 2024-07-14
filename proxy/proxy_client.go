@@ -4,24 +4,17 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core/virtual"
 	"io"
-	"net"
-	"time"
 )
 
 type Client struct {
-	Address  string                                                     //连接服务地址
-	Timeout  time.Duration                                              //连接诶服务超时时间
+	Dial     virtual.Dial                                               //连接配置
 	Register virtual.RegisterReq                                        //注册配置
 	OnOpen   func(p virtual.Packet) (io.ReadWriteCloser, string, error) //打开连接事件
 }
 
-func (this *Client) DialTCP(op ...virtual.Option) error {
-	if this.Timeout <= 0 {
-		this.Timeout = time.Second * 2
-	}
-
+func (this *Client) RunTCP(op ...virtual.Option) error {
 	//连接到服务端
-	c, err := net.DialTimeout("tcp", this.Address, this.Timeout)
+	c, _, err := this.Dial.Dial()
 	if err != nil {
 		return err
 	}

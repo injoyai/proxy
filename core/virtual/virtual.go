@@ -5,6 +5,7 @@ import (
 	"errors"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/base/maps/wait"
+	"github.com/injoyai/base/safe"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/goutil/g"
 	"github.com/injoyai/logs"
@@ -24,12 +25,20 @@ func NewTCPDefault(r io.ReadWriteCloser, option ...Option) *Virtual {
 
 func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 	v := &Virtual{
-		f:    DefaultFrame,
-		r:    r,
-		IO:   maps.NewSafe(),
-		Wait: wait.New(time.Second * 5),
-		done: make(chan struct{}),
+		f:      DefaultFrame,
+		r:      r,
+		IO:     maps.NewSafe(),
+		Wait:   wait.New(time.Second * 5),
+		done:   make(chan struct{}),
+		Closer: safe.NewCloser(),
 	}
+	v.Closer.SetCloseFunc(func(err error) error {
+		v.IO.Range(func(key, value interface{}) bool {
+			value.(*IO).Close()
+			return true
+		})
+		return v.r.Close()
+	})
 	for _, op := range option {
 		op(v)
 	}
@@ -62,7 +71,7 @@ func WithOpen(f func(p Packet) (io.ReadWriteCloser, string, error)) func(v *Virt
 	return func(v *Virtual) { v.open = f }
 }
 
-func WithOpenProxy(proxy *Proxy) func(v *Virtual) {
+func WithOpenDial(proxy *Dial) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.open = func(p Packet) (io.ReadWriteCloser, string, error) {
 			return proxy.Dial()
@@ -73,7 +82,7 @@ func WithOpenProxy(proxy *Proxy) func(v *Virtual) {
 func WithOpenPacket() func(v *Virtual) {
 	return WithOpen(func(p Packet) (io.ReadWriteCloser, string, error) {
 		m := conv.NewMap(p.GetData())
-		proxy := &Proxy{
+		proxy := &Dial{
 			Type:    m.GetString("type", "tcp"),
 			Address: m.GetString("address"),
 			Timeout: m.GetDuration("timeout"),
@@ -92,6 +101,8 @@ type Virtual struct {
 	done chan struct{}
 	err  error
 
+	*safe.Closer
+
 	open       func(p Packet) (io.ReadWriteCloser, string, error)
 	OnRegister func(v *Virtual, p Packet) error
 }
@@ -100,14 +111,6 @@ func (this *Virtual) SetOption(op ...Option) {
 	for _, f := range op {
 		f(this)
 	}
-}
-
-func (this *Virtual) Close() error {
-	this.IO.Range(func(key, value interface{}) bool {
-		value.(*IO).Close()
-		return true
-	})
-	return this.r.Close()
 }
 
 // WritePacket 发送数据包到虚拟IO
@@ -133,7 +136,7 @@ func (this *Virtual) Register(data interface{}) error {
 	return nil
 }
 
-func (this *Virtual) Open(p *Proxy) (io.ReadWriteCloser, error) {
+func (this *Virtual) Open(p *Dial) (io.ReadWriteCloser, error) {
 	tempKey := g.UUID() //临时key
 	if err := this.WritePacket(tempKey, Open|Request|NeedAck, p); err != nil {
 		return nil, err
@@ -146,7 +149,7 @@ func (this *Virtual) Open(p *Proxy) (io.ReadWriteCloser, error) {
 	return this.NewIO(val.(string)), nil
 }
 
-func (this *Virtual) OpenAndSwap(p *Proxy, c io.ReadWriteCloser) error {
+func (this *Virtual) OpenAndSwap(p *Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
 	i, err := this.Open(p)
 	if err != nil {
@@ -193,14 +196,6 @@ func (this *Virtual) NewIO(key string) *IO {
 	)
 	this.IO.Set(key, i)
 	return i
-}
-
-func (this *Virtual) Done() <-chan struct{} {
-	return this.done
-}
-
-func (this *Virtual) Err() error {
-	return this.err
 }
 
 func (this *Virtual) Run() (err error) {
