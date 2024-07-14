@@ -133,7 +133,7 @@ Flags
 					Timeout: timeout,
 				},
 				Register: &virtual.RegisterReq{
-					Port:     port,
+					Listen:   &core.Listen{Port: conv.String(port)},
 					Username: username,
 					Password: password,
 					Param:    nil,
@@ -154,7 +154,7 @@ Flags
 						Address: proxy,
 					}, nil, nil
 				},
-				OnRegister: func(c net.Conn, r *virtual.RegisterReq) error {
+				OnRegister: func(c net.Conn, r *virtual.RegisterReq) (*core.Listen, error) {
 					_, err := Script.Exec(onRegister, func(i script.Client) {
 						i.Set("username", r.Username)
 						i.Set("password", r.Password)
@@ -162,7 +162,7 @@ Flags
 							i.Set(k, v)
 						}
 					})
-					return err
+					return r.Listen, err
 				},
 			}
 			logs.Err(t.Run())

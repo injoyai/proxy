@@ -11,9 +11,9 @@ import (
 )
 
 type Server struct {
-	Listen     *core.Listen                                   //监听配置
-	OnRegister func(c net.Conn, r *virtual.RegisterReq) error //注册事件
-	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)   //代理事件
+	Listen     *core.Listen                                                   //监听配置
+	OnRegister func(c net.Conn, r *virtual.RegisterReq) (*core.Listen, error) //注册事件
+	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)                   //代理事件
 }
 
 func (this *Server) Run() error {
@@ -34,12 +34,13 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 		}
 		//注册事件
 		if this.OnRegister != nil {
-			if err := this.OnRegister(c, register); err != nil {
+			register.Listen, err = this.OnRegister(c, register)
+			if err != nil {
 				return err
 			}
 		}
-		{ //监听
-			listener, err = core.GoListen("tcp", register.Port, func(listener net.Listener, c net.Conn) (err error) {
+		{
+			listener, err = register.Listen.GoListen(func(listener net.Listener, conn net.Conn) error {
 				logs.Tracef("[%s] 新的连接\n", c.RemoteAddr().String())
 				defer logs.Tracef("[%s] 关闭连接: %v\n", c.RemoteAddr().String(), err)
 
@@ -62,12 +63,10 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 				return v.OpenAndSwap(&core.Dial{}, c)
 			})
 			if err != nil {
-				logs.Errf("[%s] 监听端口[:%d]失败: %s\n", p.GetKey(), register.Port, err.Error())
+				logs.Errf("[%s] 监听端口[:%s]失败: %s\n", p.GetKey(), register.Listen.Port, err.Error())
 				return err
 			}
-
-			logs.Infof("[:%d] 开始监听...\n", register.Port)
-
+			logs.Infof("[:%s] 开始监听...\n", register.Listen.Port)
 		}
 		return nil
 	}))

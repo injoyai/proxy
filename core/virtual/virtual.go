@@ -198,6 +198,7 @@ func (this *Virtual) Run() (err error) {
 		//按照协议去读取数据
 		p, err := this.f.ReadPacket(buf)
 		if err != nil {
+			logs.Err(err)
 			return err
 		}
 		logs.Read(p)

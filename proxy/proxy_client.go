@@ -7,8 +7,8 @@ import (
 )
 
 type Client struct {
-	Dial     *core.Dial          //连接配置
-	Register virtual.RegisterReq //注册配置
+	Dial     *core.Dial           //连接配置
+	Register *virtual.RegisterReq //注册配置
 }
 
 func (this *Client) DialTCP(op ...virtual.Option) error {

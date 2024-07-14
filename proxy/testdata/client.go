@@ -21,8 +21,11 @@ func main() {
 				Address: "127.0.0.1:7000",
 				Timeout: time.Second * 2,
 			},
-			Register: virtual.RegisterReq{
-				Port:     20001,
+			Register: &virtual.RegisterReq{
+				Listen: &core.Listen{
+					Type: "tcp",
+					Port: "20001",
+				},
 				Username: "username",
 				Password: "password",
 			},

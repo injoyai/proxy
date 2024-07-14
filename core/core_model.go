@@ -21,10 +21,10 @@ func NewDialTCP(address string, timeout ...time.Duration) *Dial {
 }
 
 type Dial struct {
-	Type    string        `json:"type"`    //连接类型,TCP,UDP,Websocket,Serial...
-	Address string        `json:"address"` //连接地址
-	Timeout time.Duration `json:"timeout"` //超时时间
-	Param   g.Map         `json:"param"`   //其他参数
+	Type    string        `json:"type,omitempty"`    //连接类型,TCP,UDP,Websocket,Serial...
+	Address string        `json:"address"`           //连接地址
+	Timeout time.Duration `json:"timeout,omitempty"` //超时时间
+	Param   g.Map         `json:"param,omitempty"`   //其他参数
 }
 
 func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
@@ -54,13 +54,12 @@ func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
 }
 
 type Listen struct {
-	Type    string `json:"type"`
-	Port    string `json:"port"`
-	Param   g.Map  `json:"param"`
-	Handler func()
+	Type  string `json:"type,omitempty"`
+	Port  string `json:"port"`
+	Param g.Map  `json:"param,omitempty"`
 }
 
-func (this *Listen) Listen(onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
+func (this *Listen) Listener() (net.Listener, error) {
 	var listener net.Listener
 	var err error
 	switch strings.ToLower(this.Type) {
@@ -69,6 +68,14 @@ func (this *Listen) Listen(onListen func(net.Listener), onConnect func(net.Liste
 	default:
 		listener, err = net.Listen("tcp", fmt.Sprintf(":%s", this.Port))
 	}
+	if err != nil {
+		return nil, err
+	}
+	return listener, nil
+}
+
+func (this *Listen) Listen(onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
+	listener, err := this.Listener()
 	if err != nil {
 		return err
 	}
@@ -85,4 +92,24 @@ func (this *Listen) Listen(onListen func(net.Listener), onConnect func(net.Liste
 			onConnect(l, c)
 		}(listener, c)
 	}
+}
+
+func (this *Listen) GoListen(onConnect func(net.Listener, net.Conn) error) (net.Listener, error) {
+	listener, err := this.Listener()
+	if err != nil {
+		return nil, err
+	}
+	go func() {
+		for {
+			c, err := listener.Accept()
+			if err != nil {
+				return
+			}
+			go func(l net.Listener, c net.Conn) {
+				defer c.Close()
+				onConnect(l, c)
+			}(listener, c)
+		}
+	}()
+	return listener, nil
 }
