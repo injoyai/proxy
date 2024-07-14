@@ -2,6 +2,7 @@ package main
 
 import (
 	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/proxy"
 	"net"
@@ -16,13 +17,12 @@ func init() {
 func main() {
 
 	t := proxy.Server{
-		Port:    7000,
-		Timeout: time.Second * 2,
-		OnProxy: func(c net.Conn) (*virtual.Dial, []byte, error) {
-			return &virtual.Dial{
+		Listen: core.Listen{Port: "7000"},
+		OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
+			return &core.Dial{
 				Type:    "tcp",
-				Address: "192.168.10.24:10001",
-				Timeout: 0,
+				Address: ":80",
+				Timeout: time.Second * 2,
 			}, nil, nil
 
 		},
@@ -31,6 +31,6 @@ func main() {
 			return nil
 		},
 	}
-	logs.Err(t.ListenTCP())
+	logs.Err(t.Run())
 
 }

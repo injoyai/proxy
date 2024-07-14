@@ -9,6 +9,7 @@ import (
 	"github.com/injoyai/conv"
 	"github.com/injoyai/goutil/g"
 	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 	"io"
 	"time"
 )
@@ -29,7 +30,6 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 		r:      r,
 		IO:     maps.NewSafe(),
 		Wait:   wait.New(time.Second * 5),
-		done:   make(chan struct{}),
 		Closer: safe.NewCloser(),
 	}
 	v.Closer.SetCloseFunc(func(err error) error {
@@ -39,6 +39,9 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 		})
 		return v.r.Close()
 	})
+	//默认使用远程的代理配置
+	WithOpenPacket()(v)
+	//自定义选项
 	for _, op := range option {
 		op(v)
 	}
@@ -71,7 +74,7 @@ func WithOpen(f func(p Packet) (io.ReadWriteCloser, string, error)) func(v *Virt
 	return func(v *Virtual) { v.open = f }
 }
 
-func WithOpenDial(proxy *Dial) func(v *Virtual) {
+func WithOpenDial(proxy *core.Dial) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.open = func(p Packet) (io.ReadWriteCloser, string, error) {
 			return proxy.Dial()
@@ -82,7 +85,7 @@ func WithOpenDial(proxy *Dial) func(v *Virtual) {
 func WithOpenPacket() func(v *Virtual) {
 	return WithOpen(func(p Packet) (io.ReadWriteCloser, string, error) {
 		m := conv.NewMap(p.GetData())
-		proxy := &Dial{
+		proxy := &core.Dial{
 			Type:    m.GetString("type", "tcp"),
 			Address: m.GetString("address"),
 			Timeout: m.GetDuration("timeout"),
@@ -98,9 +101,6 @@ type Virtual struct {
 	r    io.ReadWriteCloser
 	IO   *maps.Safe
 	Wait *wait.Entity
-	done chan struct{}
-	err  error
-
 	*safe.Closer
 
 	open       func(p Packet) (io.ReadWriteCloser, string, error)
@@ -136,7 +136,7 @@ func (this *Virtual) Register(data interface{}) error {
 	return nil
 }
 
-func (this *Virtual) Open(p *Dial) (io.ReadWriteCloser, error) {
+func (this *Virtual) Open(p *core.Dial) (io.ReadWriteCloser, error) {
 	tempKey := g.UUID() //临时key
 	if err := this.WritePacket(tempKey, Open|Request|NeedAck, p); err != nil {
 		return nil, err
@@ -149,7 +149,7 @@ func (this *Virtual) Open(p *Dial) (io.ReadWriteCloser, error) {
 	return this.NewIO(val.(string)), nil
 }
 
-func (this *Virtual) OpenAndSwap(p *Dial, c io.ReadWriteCloser) error {
+func (this *Virtual) OpenAndSwap(p *core.Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
 	i, err := this.Open(p)
 	if err != nil {
@@ -199,10 +199,7 @@ func (this *Virtual) NewIO(key string) *IO {
 }
 
 func (this *Virtual) Run() (err error) {
-	defer func() {
-		this.err = err
-		close(this.done)
-	}()
+	defer func() { this.CloseWithErr(err) }()
 	buf := bufio.NewReader(this.r)
 	for {
 		//按照协议去读取数据
@@ -210,6 +207,7 @@ func (this *Virtual) Run() (err error) {
 		if err != nil {
 			return err
 		}
+		logs.Read(p)
 		logs.Read(p)
 
 		//处理代理数据

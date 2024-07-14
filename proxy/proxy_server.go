@@ -8,18 +8,16 @@ import (
 	"github.com/injoyai/proxy/core/virtual"
 	"io"
 	"net"
-	"time"
 )
 
 type Server struct {
-	Port       int                                             //客户端连接的端口
-	Timeout    time.Duration                                   //超时时间
-	OnRegister func(c net.Conn, r *virtual.RegisterReq) error  //注册事件
-	OnProxy    func(c net.Conn) (*virtual.Dial, []byte, error) //代理事件
+	Listen     core.Listen                                    //监听配置
+	OnRegister func(c net.Conn, r *virtual.RegisterReq) error //注册事件
+	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)   //代理事件
 }
 
-func (this *Server) ListenTCP() error {
-	return core.RunListen("tcp", this.Port, core.WithListenLog, this.Handler)
+func (this *Server) Run() error {
+	return this.Listen.Listen(core.WithListenLog, this.Handler)
 }
 
 // Handler 对客户端进行注册验证操作
@@ -61,7 +59,7 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 				}
 
 				//使用默认(客户端)代理
-				return v.OpenAndSwap(&virtual.Dial{}, c)
+				return v.OpenAndSwap(&core.Dial{}, c)
 			})
 			if err != nil {
 				logs.Errf("[%s] 监听端口[:%d]失败: %s\n", p.GetKey(), register.Port, err.Error())

@@ -7,21 +7,21 @@ import (
 )
 
 type Forward struct {
-	Port    int    //监听端口
-	Address string //转发地址
+	Listen  core.Listen //监听配置
+	Forward core.Dial   //转发配置
 }
 
 func (this *Forward) ListenTCP() error {
-	logs.Infof("[:%d] 开始监听...\n", this.Port)
-	defer logs.Infof("[:%d] 关闭监听...\n", this.Port)
-	return core.RunListen("tcp", this.Port, nil, this.Handler)
+	logs.Infof("[:%s] 开始监听...\n", this.Listen.Port)
+	defer logs.Infof("[:%s] 关闭监听...\n", this.Listen.Port)
+	return this.Listen.Listen(nil, this.Handler)
 }
 
 func (this *Forward) Handler(l net.Listener, c net.Conn) error {
-	logs.Infof("[%s] 转发至 [%s]\n", c.RemoteAddr().String(), this.Address)
+	logs.Infof("[%s] 转发至 [%s]\n", c.RemoteAddr().String(), this.Forward.Address)
 	defer c.Close()
 
-	newConn, err := net.Dial("tcp", this.Address)
+	newConn, _, err := this.Forward.Dial()
 	if err != nil {
 		return err
 	}

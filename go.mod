@@ -3,7 +3,7 @@ module github.com/injoyai/proxy
 go 1.20
 
 require (
-	github.com/injoyai/base v1.0.14
+	github.com/injoyai/base v1.0.15
 	github.com/injoyai/conv v1.1.7
 	github.com/injoyai/goutil v0.0.0-20240712153111-79e77890c723
 	github.com/injoyai/logs v1.0.7

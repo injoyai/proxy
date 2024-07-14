@@ -2,15 +2,16 @@ package main
 
 import (
 	"fmt"
+	"github.com/injoyai/conv"
 	"github.com/injoyai/conv/cfg/v2"
 	"github.com/injoyai/goutil/other/command"
 	"github.com/injoyai/goutil/script"
 	"github.com/injoyai/goutil/script/js"
 	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/forward"
 	. "github.com/injoyai/proxy/proxy"
-	"io"
 	"net"
 	"os"
 	"strings"
@@ -114,8 +115,10 @@ Flags
 
 	case "forward":
 		p := forward.Forward{
-			Port:    port,
-			Address: proxy,
+			Listen: core.Listen{Port: conv.String(port)},
+			Forward: core.Dial{
+				Address: proxy,
+			},
 		}
 		logs.Err(p.ListenTCP())
 
@@ -124,19 +127,11 @@ Flags
 		switch os.Args[2] {
 		case "client":
 			t := Client{
-				Dial: virtual.Dial{
+				Dial: core.Dial{
 					Type:    "tcp",
 					Address: address,
 					Timeout: timeout,
 					Param:   nil,
-				},
-				OnOpen: func(p virtual.Packet) (io.ReadWriteCloser, string, error) {
-					_proxy := &virtual.Dial{
-						Type:    "tcp",
-						Address: proxy,
-						Timeout: timeout,
-					}
-					return _proxy.Dial()
 				},
 				Register: virtual.RegisterReq{
 					Port:     port,
@@ -145,14 +140,17 @@ Flags
 					Param:    nil,
 				},
 			}
-			logs.Err(t.RunTCP())
+			logs.Err(t.RunTCP(virtual.WithOpenDial(&core.Dial{
+				Type:    "tcp",
+				Address: proxy,
+				Timeout: timeout,
+			})))
 
 		case "server":
 			t := Server{
-				Port:    port,
-				Timeout: timeout,
-				OnProxy: func(c net.Conn) (*virtual.Dial, []byte, error) {
-					return &virtual.Dial{
+				Listen: core.Listen{Port: conv.String(port)},
+				OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
+					return &core.Dial{
 						Type:    "tcp",
 						Address: proxy,
 					}, nil, nil
@@ -168,7 +166,7 @@ Flags
 					return err
 				},
 			}
-			logs.Err(t.ListenTCP())
+			logs.Err(t.Run())
 
 		}
 
