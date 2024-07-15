@@ -130,7 +130,7 @@ func (this *Virtual) Register(data interface{}) error {
 	return nil
 }
 
-func (this *Virtual) Open(p *core.Dial) (io.ReadWriteCloser, error) {
+func (this *Virtual) Open(p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
 	tempKey := g.UUID() //临时key
 	if err := this.WritePacket(tempKey, Open|Request|NeedAck, p); err != nil {
 		return nil, err
@@ -140,12 +140,12 @@ func (this *Virtual) Open(p *core.Dial) (io.ReadWriteCloser, error) {
 		return nil, err
 	}
 	//NewIO已缓存IO
-	return this.NewIO(val.(string)), nil
+	return this.NewIO(val.(string), closer), nil
 }
 
 func (this *Virtual) OpenAndSwap(p *core.Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
-	i, err := this.Open(p)
+	i, err := this.Open(p, c)
 	if err != nil {
 		return err
 	}
@@ -174,16 +174,18 @@ func (this *Virtual) GetIO(key string) *IO {
 	return nil
 }
 
-func (this *Virtual) NewIO(key string) *IO {
+func (this *Virtual) NewIO(key string, closer io.Closer) *IO {
 	i := NewIO(key, this.r, NewBuffer(20),
 		func(bs []byte) ([]byte, error) {
 			p := this.NewPacket(key, Write, bs)
 			return p.Bytes(), nil
 		}, func(v *IO, err error) error {
-			//go里面,IO的一方如果正常关闭,那么另一方读写的时候会收到io.EOF的错误
-			p := this.NewPacket(key, Close, err)
-			this.r.Write(p.Bytes())
+			//发送至隧道,通知隧道另一端
+			this.WritePacket(key, Close, err)
+			//从缓存中移除
 			this.IO.Del(key)
+			//关闭客户端
+			closer.Close()
 			return nil
 		},
 	)
@@ -198,7 +200,6 @@ func (this *Virtual) Run() (err error) {
 		//按照协议去读取数据
 		p, err := this.f.ReadPacket(buf)
 		if err != nil {
-			logs.Err(err)
 			return err
 		}
 		logs.Read(p)
@@ -299,10 +300,10 @@ func (this *Virtual) Run() (err error) {
 					//  2.3 性能会下降,多了一次IO
 
 					//新建虚拟IO
-					i := this.NewIO(key)
+					i := this.NewIO(key, c)
 					go func() {
 						defer func() {
-							logs.Tracef("[%s] 关闭连接\n", key)
+							logs.Tracef("[%s] 关闭连接,%v\n", key, i.Err())
 							c.Close()
 							i.Close()
 						}()

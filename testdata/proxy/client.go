@@ -30,7 +30,7 @@ func main() {
 				Password: "password",
 			},
 		}
-		logs.Err(t.DialTCP())
+		logs.Err(t.DialTCP(virtual.WithOpenTCP("192.168.10.24:10001")))
 		<-time.After(time.Second * 5)
 	}
 }

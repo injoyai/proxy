@@ -11,9 +11,9 @@ import (
 )
 
 type Server struct {
-	Listen     *core.Listen                                                   //监听配置
-	OnRegister func(c net.Conn, r *virtual.RegisterReq) (*core.Listen, error) //注册事件
-	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)                   //代理事件
+	Listen     *core.Listen                                   //监听配置
+	OnRegister func(c net.Conn, r *virtual.RegisterReq) error //注册事件
+	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)   //代理事件
 }
 
 func (this *Server) Run() error {
@@ -21,11 +21,11 @@ func (this *Server) Run() error {
 }
 
 // Handler 对客户端进行注册验证操作
-func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
+func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 
 	var listener net.Listener
 
-	v := virtual.New(c, virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
+	v := virtual.New(tun, virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
 		//解析注册数据
 		register := new(virtual.RegisterReq)
 		err := json.Unmarshal(p.GetData(), register)
@@ -34,13 +34,12 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 		}
 		//注册事件
 		if this.OnRegister != nil {
-			register.Listen, err = this.OnRegister(c, register)
-			if err != nil {
+			if err = this.OnRegister(tun, register); err != nil {
 				return err
 			}
 		}
-		{
-			listener, err = register.Listen.GoListen(func(listener net.Listener, conn net.Conn) error {
+		{ //监听端口
+			listener, err = register.Listen.GoListen(func(listener net.Listener, c net.Conn) error {
 				logs.Tracef("[%s] 新的连接\n", c.RemoteAddr().String())
 				defer logs.Tracef("[%s] 关闭连接: %v\n", c.RemoteAddr().String(), err)
 
@@ -72,7 +71,7 @@ func (this *Server) Handler(tunListen net.Listener, c net.Conn) error {
 	}))
 
 	defer func() {
-		c.Close()
+		tun.Close()
 		v.Close()
 		if listener != nil {
 			listener.Close()

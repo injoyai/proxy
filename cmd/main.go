@@ -154,7 +154,7 @@ Flags
 						Address: proxy,
 					}, nil, nil
 				},
-				OnRegister: func(c net.Conn, r *virtual.RegisterReq) (*core.Listen, error) {
+				OnRegister: func(c net.Conn, r *virtual.RegisterReq) error {
 					_, err := Script.Exec(onRegister, func(i script.Client) {
 						i.Set("username", r.Username)
 						i.Set("password", r.Password)
@@ -162,7 +162,7 @@ Flags
 							i.Set(k, v)
 						}
 					})
-					return r.Listen, err
+					return err
 				},
 			}
 			logs.Err(t.Run())

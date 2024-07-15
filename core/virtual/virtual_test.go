@@ -39,7 +39,7 @@ func TestNew(t *testing.T) {
 
 	for {
 		<-time.After(time.Second)
-		c, err := v.Open(&core.Dial{Address: ":10086"})
+		c, err := v.Open(&core.Dial{Address: ":10086"}, nil)
 		if err != nil {
 			t.Error(err)
 			continue

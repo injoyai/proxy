@@ -21,9 +21,9 @@ func main() {
 		OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
 			return &core.Dial{Address: ":80"}, nil, nil
 		},
-		OnRegister: func(c net.Conn, r *virtual.RegisterReq) (*core.Listen, error) {
+		OnRegister: func(c net.Conn, r *virtual.RegisterReq) error {
 			logs.Debug("注册信息: ", r)
-			return r.Listen, nil
+			return nil
 		},
 	}
 	logs.Err(t.Run())
