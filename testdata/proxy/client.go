@@ -1,6 +1,7 @@
 package main
 
 import (
+	"github.com/injoyai/goutil/g"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
@@ -17,6 +18,7 @@ func init() {
 func main() {
 	for {
 		t := proxy.Client{
+			SN: g.UUID(),
 			Dial: &core.Dial{
 				Address: "127.0.0.1:7000",
 				Timeout: time.Second * 2,

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/conv/cfg/v2"
+	"github.com/injoyai/goutil/g"
 	"github.com/injoyai/goutil/other/command"
 	"github.com/injoyai/goutil/script"
 	"github.com/injoyai/goutil/script/js"
@@ -130,6 +131,7 @@ Flags
 		switch os.Args[2] {
 		case "client":
 			t := Client{
+				SN:   g.UUID(),
 				Dial: core.NewDialTCP(address, timeout),
 				Register: &virtual.RegisterReq{
 					Listen:   &core.Listen{Port: conv.String(port)},

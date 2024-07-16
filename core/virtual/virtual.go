@@ -121,11 +121,11 @@ func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
 	return p
 }
 
-func (this *Virtual) Register(data interface{}) error {
-	if err := this.WritePacket("register", Request|Register|NeedAck, data); err != nil {
+func (this *Virtual) Register(sn string, data interface{}) error {
+	if err := this.WritePacket(sn, Request|Register|NeedAck, data); err != nil {
 		return err
 	}
-	if _, err := this.Wait.Wait("register"); err != nil {
+	if _, err := this.Wait.Wait(sn); err != nil {
 		return err
 	}
 	return nil

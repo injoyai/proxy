@@ -30,19 +30,25 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 
 	var listener net.Listener
 
-	v := virtual.New(tun, virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
+	key := ""
+	v := virtual.New(tun)
+	v.SetOption(virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
 		//解析注册数据
 		register := new(virtual.RegisterReq)
 		err := json.Unmarshal(p.GetData(), register)
 		if err != nil {
 			return err
 		}
+
 		//注册事件
+		key = p.GetKey()
 		if this.OnRegister != nil {
-			if err = this.OnRegister(tun, register); err != nil {
+			err = this.OnRegister(tun, register)
+			if err != nil {
 				return err
 			}
 		}
+		this.Clients.Set(key, v)
 
 		//判断客户端是否需要监听端口
 		//客户端可以选择不监听端口,而由服务端进行安排
@@ -81,9 +87,9 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 		}
 		return nil
 	}))
-	//this.Clients.Set(v, v)
 
 	defer func() {
+		this.Clients.Del(key)
 		tun.Close()
 		v.Close()
 		if listener != nil {

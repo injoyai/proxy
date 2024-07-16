@@ -7,6 +7,7 @@ import (
 )
 
 type Client struct {
+	SN       string               //唯一标识符
 	Dial     *core.Dial           //连接配置
 	Register *virtual.RegisterReq //注册配置
 }
@@ -26,7 +27,7 @@ func (this *Client) DialTCP(op ...virtual.Option) error {
 	go v.Run()
 
 	//注册到服务
-	if err := v.Register(this.Register); err != nil {
+	if err := v.Register(this.SN, this.Register); err != nil {
 		return err
 	}
 	logs.Infof("[%s] 注册成功\n", this.Dial.Address)
