@@ -2,6 +2,7 @@ package core
 
 import (
 	"fmt"
+	"github.com/injoyai/conv"
 	"github.com/injoyai/goutil/g"
 	"io"
 	"net"
@@ -10,14 +11,11 @@ import (
 )
 
 func NewDialTCP(address string, timeout ...time.Duration) *Dial {
-	d := &Dial{
+	return &Dial{
 		Type:    "tcp",
 		Address: address,
+		Timeout: conv.DefaultDuration(0, timeout...),
 	}
-	if len(timeout) > 0 {
-		d.Timeout = timeout[0]
-	}
-	return d
 }
 
 type Dial struct {

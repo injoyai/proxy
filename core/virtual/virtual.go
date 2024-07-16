@@ -66,10 +66,11 @@ func WithOpen(f func(p *core.Dial) (io.ReadWriteCloser, string, error)) func(v *
 	return func(v *Virtual) { v.open = f }
 }
 
-func WithOpenTCP(address string) func(v *Virtual) {
+func WithOpenTCP(address string, timeout ...time.Duration) func(v *Virtual) {
 	return WithOpenCustom(&core.Dial{
 		Type:    "tcp",
 		Address: address,
+		Timeout: conv.DefaultDuration(0, timeout...),
 	})
 }
 

@@ -24,6 +24,9 @@ func init() {
 
 	//设置日志前缀为时间(不包括日期)
 	logs.SetFormatterWithTime()
+
+	//设置日志不显示颜色
+	logs.SetShowColor(false)
 }
 
 var (
@@ -35,13 +38,13 @@ func main() {
 	//初始化配置信息,优先获取flag,然后尝试从配置文件获取
 	cfg.Init(
 		command.WithFlags(
-			&command.Flag{Name: "port", Memo: "监听端口"},
-			&command.Flag{Name: "address", Memo: "服务地址(代理)"},
+			&command.Flag{Name: "port", Memo: "监听端口", Short: "p"},
+			&command.Flag{Name: "address", Memo: "服务地址(代理)", Short: "a"},
 			&command.Flag{Name: "proxy", Memo: "代理地址"},
-			&command.Flag{Name: "timeout", Memo: "超时时间"},
-			&command.Flag{Name: "username", Memo: "用户名"},
+			&command.Flag{Name: "timeout", Memo: "超时时间", Short: "t"},
+			&command.Flag{Name: "username", Memo: "用户名", Short: "u"},
 			&command.Flag{Name: "password", Memo: "密码"},
-			&command.Flag{Name: "log.level", Memo: "日志等级"},
+			&command.Flag{Name: "log.level", Memo: "日志等级", Short: "l"},
 		),
 		cfg.WithYaml("./config/config.yaml"),
 	)
@@ -74,7 +77,7 @@ func main() {
 		case "none":
 			return logs.LevelNone
 		default:
-			return logs.LevelAll
+			return logs.LevelInfo
 		}
 	}())
 
@@ -87,10 +90,10 @@ func main() {
 	onRegister := cfg.GetString("onRegister")
 
 	help := `
-使用 注意Flags在前
-    [flags] forward			转发模式(本地代理)		
-    [flags] proxy client   	代理客户端			
-    [flags] proxy server   	代理服务端			
+使用
+    forward [flags] 		转发模式(本地代理)		
+    proxy client [flags]   	代理客户端			
+    proxy server [flags]   	代理服务端			
 
 Flags
     --proxy 	string		代理地址(默认127.0.0.1:10001)	
@@ -127,11 +130,7 @@ Flags
 		switch os.Args[2] {
 		case "client":
 			t := Client{
-				Dial: &core.Dial{
-					Type:    "tcp",
-					Address: address,
-					Timeout: timeout,
-				},
+				Dial: core.NewDialTCP(address, timeout),
 				Register: &virtual.RegisterReq{
 					Listen:   &core.Listen{Port: conv.String(port)},
 					Username: username,
@@ -139,11 +138,11 @@ Flags
 					Param:    nil,
 				},
 			}
-			logs.Err(t.DialTCP(virtual.WithOpenCustom(&core.Dial{
-				Type:    "tcp",
-				Address: proxy,
-				Timeout: timeout,
-			})))
+			ops := []virtual.Option(nil)
+			if len(proxy) > 0 {
+				ops = append(ops, virtual.WithOpenTCP(proxy, timeout))
+			}
+			logs.Err(t.DialTCP(ops...))
 
 		case "server":
 			t := Server{
