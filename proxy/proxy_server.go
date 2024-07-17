@@ -12,10 +12,10 @@ import (
 )
 
 type Server struct {
-	Clients    *maps.Safe                                               //客户端
-	Listen     *core.Listen                                             //监听配置
-	OnRegister func(c net.Conn, r *virtual.RegisterReq) (string, error) //注册事件
-	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)             //代理事件
+	Clients    *maps.Safe                                                           //客户端
+	Listen     *core.Listen                                                         //监听配置
+	OnRegister func(c net.Conn, key *virtual.Virtual, r *virtual.RegisterReq) error //注册事件
+	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)                         //代理事件
 }
 
 func (this *Server) Run() error {
@@ -30,8 +30,7 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 
 	var listener net.Listener
 
-	key := tun.RemoteAddr().String()
-	v := virtual.New(tun)
+	v := virtual.New(tun, virtual.WithKey(tun.RemoteAddr().String()))
 	v.SetOption(virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
 		//解析注册数据
 		register := new(virtual.RegisterReq)
@@ -40,14 +39,15 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 			return err
 		}
 
+		v.SetKey(p.GetKey())
 		//注册事件
 		if this.OnRegister != nil {
-			key, err = this.OnRegister(tun, register)
-			if err != nil {
+			if err := this.OnRegister(tun, v, register); err != nil {
 				return err
 			}
 		}
-		this.Clients.Set(key, v)
+		//如果存在老的连接的话,会被覆盖,变成野连接,能收到数据,不能发数据,还是说关闭老连接?
+		this.Clients.Set(v.Key(), v)
 
 		//判断客户端是否需要监听端口
 		//客户端可以选择不监听端口,而由服务端进行安排
@@ -57,8 +57,8 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 
 		{ //监听端口
 			listener, err = register.Listen.GoListen(func(listener net.Listener, c net.Conn) error {
-				logs.Tracef("[%s] 新的连接\n", c.RemoteAddr().String())
-				defer logs.Tracef("[%s] 关闭连接: %v\n", c.RemoteAddr().String(), err)
+				cKey := c.RemoteAddr().String()
+				defer logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
 
 				//使用自定义(服务端)代理
 				if this.OnProxy != nil {
@@ -66,7 +66,8 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 					if err != nil {
 						return err
 					}
-					return v.OpenAndSwap(proxy, struct {
+					logs.Infof("[%s] 代理至 [%s -> %s]\n", cKey, v.Key(), proxy.Address)
+					return v.OpenAndSwap(c.RemoteAddr().String(), proxy, struct {
 						io.Reader
 						io.WriteCloser
 					}{
@@ -75,20 +76,21 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 					})
 				}
 
+				logs.Infof("[%s] 代理至 [%s]\n", cKey, v.Key())
 				//使用默认(客户端)代理
-				return v.OpenAndSwap(&core.Dial{}, c)
+				return v.OpenAndSwap(c.RemoteAddr().String(), &core.Dial{}, c)
 			})
 			if err != nil {
 				logs.Errf("[%s] 监听端口[:%s]失败: %s\n", p.GetKey(), register.Listen.Port, err.Error())
 				return err
 			}
-			logs.Infof("[:%s] 开始监听...\n", register.Listen.Port)
+			logs.Infof("[%s] 请求监听[:%s]成功...\n", v.Key(), register.Listen.Port)
 		}
 		return nil
 	}))
 
 	defer func() {
-		this.Clients.Del(key)
+		this.Clients.Del(v.Key())
 		tun.Close()
 		v.Close()
 		if listener != nil {

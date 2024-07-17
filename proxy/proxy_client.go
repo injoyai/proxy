@@ -14,14 +14,19 @@ type Client struct {
 
 func (this *Client) DialTCP(op ...virtual.Option) error {
 	//连接到服务端
-	c, _, err := this.Dial.Dial()
+	c, k, err := this.Dial.Dial()
 	if err != nil {
 		return err
 	}
 	defer c.Close()
 
 	//虚拟设备管理,默认使用服务的代理配置代理
-	v := virtual.New(c, op...)
+	v := virtual.New(c)
+	v.SetKey(k)
+	v.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
+		logs.Infof("[%s -> %s] 代理至 %s\n", p.GetKey(), v.Key(), d.Address)
+	}))
+	v.SetOption(op...)
 	defer v.Close()
 
 	go v.Run()
@@ -30,7 +35,7 @@ func (this *Client) DialTCP(op ...virtual.Option) error {
 	if err := v.Register(this.Register); err != nil {
 		return err
 	}
-	logs.Infof("[%s] 注册成功\n", this.Dial.Address)
+	logs.Infof("[%s] 注册至[%s]成功...\n", v.Key(), this.Dial.Address)
 
 	<-v.Done()
 	return v.Err()

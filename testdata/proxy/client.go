@@ -10,7 +10,7 @@ import (
 
 func init() {
 	//logs.SetFormatterWithTime()
-	//logs.SetLevel(logs.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 	logs.SetWriter(logs.Stdout)
 }
 
@@ -30,7 +30,10 @@ func main() {
 				Password: "password",
 			},
 		}
-		logs.Err(t.DialTCP(virtual.WithOpenTCP("192.168.10.24:10001")))
+		logs.Err(t.DialTCP(
+			virtual.WithOpenTCP("192.168.10.24:10001"),
+			virtual.WithKey("ABC"),
+		))
 		<-time.After(time.Second * 5)
 	}
 }

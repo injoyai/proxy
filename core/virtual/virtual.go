@@ -3,6 +3,7 @@ package virtual
 import (
 	"bufio"
 	"errors"
+	"fmt"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/base/maps/wait"
 	"github.com/injoyai/base/safe"
@@ -18,6 +19,7 @@ type Option func(v *Virtual)
 
 func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 	v := &Virtual{
+		k:      fmt.Sprintf("%p", r),
 		f:      DefaultFrame,
 		r:      r,
 		IO:     maps.NewSafe(),
@@ -40,6 +42,12 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 	return v
 }
 
+func WithKey(k string) func(v *Virtual) {
+	return func(v *Virtual) {
+		v.k = k
+	}
+}
+
 func WithFrame(f Frame) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.f = f
@@ -59,7 +67,14 @@ func WithRegister(f func(v *Virtual, p Packet) error) func(v *Virtual) {
 	}
 }
 
-func WithOpen(f func(p *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
+// WithOpened 请求建立连接成功事件
+func WithOpened(f func(p Packet, d *core.Dial, key string)) func(v *Virtual) {
+	return func(v *Virtual) {
+		v.OnOpened = f
+	}
+}
+
+func WithOpen(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
 	if f == nil {
 		return WithOpenRemote()
 	}
@@ -77,7 +92,7 @@ func WithOpenTCP(address string, timeout ...time.Duration) func(v *Virtual) {
 // WithOpenCustom 使用自定义代理配置进行代理,忽略服务端的配置
 func WithOpenCustom(proxy *core.Dial) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.open = func(p *core.Dial) (io.ReadWriteCloser, string, error) {
+		v.open = func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
 			return proxy.Dial()
 		}
 	}
@@ -85,21 +100,31 @@ func WithOpenCustom(proxy *core.Dial) func(v *Virtual) {
 
 // WithOpenRemote 使用服务端的代理配置进行代理
 func WithOpenRemote() func(v *Virtual) {
-	return WithOpen(func(p *core.Dial) (io.ReadWriteCloser, string, error) {
-		return p.Dial()
+	return WithOpen(func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
+		return d.Dial()
 	})
 }
 
 // Virtual 虚拟设备管理,收到的数据自动转发到对应的IO
 type Virtual struct {
+	k    string
 	f    Frame
 	r    io.ReadWriteCloser
 	IO   *maps.Safe
 	Wait *wait.Entity
 	*safe.Closer
 
-	open       func(p *core.Dial) (io.ReadWriteCloser, string, error)
+	open       func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)
 	OnRegister func(v *Virtual, p Packet) error
+	OnOpened   func(p Packet, d *core.Dial, key string)
+}
+
+func (this *Virtual) Key() string {
+	return this.k
+}
+
+func (this *Virtual) SetKey(k string) {
+	this.k = k
 }
 
 func (this *Virtual) SetOption(op ...Option) {
@@ -122,21 +147,23 @@ func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
 }
 
 func (this *Virtual) Register(data interface{}) error {
-	if err := this.WritePacket("register", Request|Register|NeedAck, data); err != nil {
+	if err := this.WritePacket(this.Key(), Request|Register|NeedAck, data); err != nil {
 		return err
 	}
-	if _, err := this.Wait.Wait("register"); err != nil {
+	if _, err := this.Wait.Wait(this.Key()); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (this *Virtual) Open(p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
-	tempKey := g.UUID() //临时key
-	if err := this.WritePacket(tempKey, Open|Request|NeedAck, p); err != nil {
+func (this *Virtual) Open(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
+	if len(k) == 0 {
+		k = g.UUID()
+	}
+	if err := this.WritePacket(k, Open|Request|NeedAck, p); err != nil {
 		return nil, err
 	}
-	val, err := this.Wait.Wait(tempKey)
+	val, err := this.Wait.Wait(k)
 	if err != nil {
 		return nil, err
 	}
@@ -144,9 +171,9 @@ func (this *Virtual) Open(p *core.Dial, closer io.Closer) (io.ReadWriteCloser, e
 	return this.NewIO(val.(string), closer), nil
 }
 
-func (this *Virtual) OpenAndSwap(p *core.Dial, c io.ReadWriteCloser) error {
+func (this *Virtual) OpenAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
-	i, err := this.Open(p, c)
+	i, err := this.Open(k, p, c)
 	if err != nil {
 		return err
 	}
@@ -285,14 +312,18 @@ func (this *Virtual) Run() (err error) {
 					delete(gm, "type")
 					delete(gm, "address")
 					delete(gm, "timeout")
-					c, key, err := this.open(&core.Dial{
+					d := &core.Dial{
 						Type:    m.GetString("type", "tcp"),
 						Address: m.GetString("address"),
 						Timeout: m.GetDuration("timeout"),
 						Param:   gm,
-					})
+					}
+					c, key, err := this.open(p, d)
 					if err != nil {
 						return nil, err
+					}
+					if this.OnOpened != nil {
+						this.OnOpened(p, d, key)
 					}
 					//1. 如果p.Get重复怎么处理,请求的是临时key,一般用uuid
 					//2. 是否需要读写分离,这样错误能对应上,或者被动read,下发read
@@ -311,9 +342,11 @@ func (this *Virtual) Run() (err error) {
 
 						go func() {
 							_, err := io.Copy(c, i)
+							logs.PrintErr(err)
 							i.CloseWithErr(err)
 						}()
 						_, err := io.Copy(i, c)
+						logs.PrintErr(err)
 						i.CloseWithErr(err)
 					}()
 

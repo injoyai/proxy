@@ -12,8 +12,8 @@ import (
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/forward"
 	. "github.com/injoyai/proxy/proxy"
+	"github.com/spf13/cobra"
 	"net"
-	"os"
 	"strings"
 	"time"
 )
@@ -36,28 +36,179 @@ var (
 func main() {
 
 	//初始化配置信息,优先获取flag,然后尝试从配置文件获取
-	cfg.Init(
-		command.WithFlags(
-			&command.Flag{Name: "port", Memo: "监听端口", Short: "p"},
-			&command.Flag{Name: "address", Memo: "服务地址(代理)", Short: "a"},
-			&command.Flag{Name: "proxy", Memo: "代理地址"},
-			&command.Flag{Name: "timeout", Memo: "超时时间", Short: "t"},
-			&command.Flag{Name: "username", Memo: "用户名", Short: "u"},
-			&command.Flag{Name: "password", Memo: "密码"},
-			&command.Flag{Name: "log.level", Memo: "日志等级", Short: "l"},
-		),
-		cfg.WithYaml("./config/config.yaml"),
-	)
+	cfg.Init(cfg.WithYaml("./config/config.yaml"))
 
-	args := []string(nil)
-	for i := range os.Args {
-		if !strings.HasPrefix(os.Args[i], "-") {
-			args = append(args, os.Args[i])
-		}
+	root := command.Command{
+		Flag: []*command.Flag{{Name: "log.level", Memo: "日志等级,info,debug等"}},
+		Child: []*command.Command{
+			{
+				Command: cobra.Command{
+					Use:     "forward",
+					Short:   "转发模式",
+					Example: "proxy forward 8080->:80",
+				},
+				Flag: []*command.Flag{
+					{Name: "port", Memo: "监听端口", Short: "p", Default: "80"},
+					{Name: "proxy", Memo: "转发地址"},
+				},
+				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
+					SetLevel(flag)
+
+					port := flag.GetString("port")
+					proxy := flag.GetString("proxy")
+					timeout := flag.GetDuration("timeout", 5*time.Second)
+
+					if len(args) > 0 {
+						if ls := strings.SplitN(args[0], "=>", 2); len(ls) == 2 {
+							port = ls[0]
+							proxy = ls[1]
+						} else if ls := strings.SplitN(args[0], "<=", 2); len(ls) == 2 {
+							port = ls[1]
+							proxy = ls[0]
+						}
+					}
+
+					p := forward.Forward{
+						Listen:  &core.Listen{Port: port},
+						Forward: core.NewDialTCP(proxy, timeout),
+					}
+
+					logs.Err(p.ListenTCP())
+				},
+			},
+			{
+				Command: cobra.Command{
+					Use:     "client",
+					Short:   "代理客户端",
+					Example: "proxy client xxx.xxx.xxx.xxx:7000 :10001<-20001",
+				},
+				Flag: []*command.Flag{
+					{Name: "port", Memo: "想让服务端监听的端口", Short: "p"},
+					{Name: "proxy", Memo: "客户端代理地址"},
+					{Name: "timeout", Memo: "超时时间", Short: "t"},
+					{Name: "username", Memo: "用户名", Short: "u"},
+					{Name: "password", Memo: "密码"},
+					{Name: "sn", Memo: "SN码"},
+				},
+				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
+					SetLevel(flag)
+
+					if len(args) == 0 {
+						fmt.Println("未填写服务地址")
+						return
+					}
+
+					port := flag.GetString("port")
+					proxy := flag.GetString("proxy")
+					timeout := flag.GetDuration("timeout", 5*time.Second)
+					username := flag.GetString("username")
+					password := flag.GetString("password")
+					sn := flag.GetString("sn")
+
+					if len(args) > 1 {
+						if ls := strings.SplitN(args[1], "<=", 2); len(ls) == 2 {
+							port = ls[1]
+							proxy = ls[0]
+						} else if ls := strings.SplitN(args[1], "=>", 2); len(ls) == 2 {
+							port = ls[0]
+							proxy = ls[1]
+						}
+					}
+
+					t := Client{
+						Dial: core.NewDialTCP(args[0], timeout),
+						Register: &virtual.RegisterReq{
+							Listen:   core.NewListenTCP(port),
+							Username: username,
+							Password: password,
+						},
+					}
+					ops := []virtual.Option{func(v *virtual.Virtual) {
+						if len(sn) > 0 {
+							v.SetKey(sn)
+						}
+					}}
+					if len(proxy) > 0 {
+						ops = append(ops, virtual.WithOpenTCP(proxy, timeout))
+					}
+					for {
+						logs.Err(t.DialTCP(ops...))
+						<-time.After(time.Second * 5)
+					}
+				},
+			},
+			{
+				Command: cobra.Command{
+					Use:     "server",
+					Short:   "代理服务端",
+					Example: "proxy server -p=7000 :10001<-20001",
+				},
+				Flag: []*command.Flag{
+					{Name: "port", Memo: "监听端口", Short: "p", Default: "7000"},
+					{Name: "proxy", Memo: "代理地址"},
+					{Name: "timeout", Memo: "超时时间", Short: "t"},
+					{Name: "listen", Memo: "监听端口"},
+				},
+				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
+					SetLevel(flag)
+
+					port := flag.GetString("port")
+					proxy := flag.GetString("proxy")
+					listen := flag.GetString("listen")
+					onRegister := flag.GetString("onRegister")
+
+					if len(args) > 0 {
+						if ls := strings.SplitN(args[0], "=>", 2); len(ls) == 2 {
+							listen = ls[0]
+							proxy = ls[1]
+						} else if ls := strings.SplitN(args[0], "<=", 2); len(ls) == 2 {
+							listen = ls[1]
+							proxy = ls[0]
+						}
+					}
+
+					t := Server{
+						Listen: core.NewListenTCP(port),
+						OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
+							if len(proxy) == 0 {
+								return nil, nil, nil
+							}
+							return core.NewDialTCP(proxy), nil, nil
+						},
+						OnRegister: func(c net.Conn, v *virtual.Virtual, r *virtual.RegisterReq) error {
+							if len(listen) > 0 {
+								r.Listen = core.NewListenTCP(listen)
+							}
+							if len(onRegister) == 0 {
+								return nil
+							}
+							result, err := Script.Exec(onRegister, func(i script.Client) {
+								i.Set("key", c.RemoteAddr().String())
+								i.Set("username", r.Username)
+								i.Set("password", r.Password)
+								for k, v := range r.Param {
+									i.Set(k, v)
+								}
+							})
+							if k := conv.String(result); len(k) > 0 {
+								v.SetKey(k)
+							}
+							return err
+						},
+					}
+					logs.Err(t.Run())
+				},
+			},
+		},
 	}
 
+	root.Execute()
+
+}
+
+func SetLevel(flag *command.Flags) {
 	logs.SetLevel(func() logs.Level {
-		switch strings.ToLower(cfg.GetString("log.level")) {
+		switch strings.ToLower(flag.GetString("log.level")) {
 		case "all":
 			return logs.LevelAll
 		case "trace":
@@ -80,94 +231,4 @@ func main() {
 			return logs.LevelInfo
 		}
 	}())
-
-	address := cfg.GetString("address", "127.0.0.1:7000")
-	port := cfg.GetInt("port", 10088)
-	proxy := cfg.GetString("proxy", "127.0.0.1:10001")
-	username := cfg.GetString("username")
-	password := cfg.GetString("password")
-	timeout := cfg.GetDuration("timeout", time.Second*2)
-	onRegister := cfg.GetString("onRegister")
-
-	help := `
-使用
-    forward [flags] 		转发模式(本地代理)		
-    proxy client [flags]   	代理客户端			
-    proxy server [flags]   	代理服务端			
-
-Flags
-    --proxy 	string		代理地址(默认127.0.0.1:10001)	
-    --address 	string		服务地址(默认127.0.0.1:7000)		
-    --port 		int			监听端口(默认10088)		
-    --timeout 	string		超时时间(默认2s)		
-    --username 	string		用户名
-    --password 	string		密码
-`
-
-	if len(args) < 2 || (args[1] != "proxy" && args[1] != "forward") {
-		fmt.Printf(help)
-		return
-	}
-
-	if args[1] == "proxy" && len(args) < 3 {
-		fmt.Printf(help)
-		return
-	}
-
-	switch args[1] {
-
-	case "forward":
-		p := forward.Forward{
-			Listen: &core.Listen{Port: conv.String(port)},
-			Forward: &core.Dial{
-				Address: proxy,
-			},
-		}
-		logs.Err(p.ListenTCP())
-
-	case "proxy":
-
-		switch os.Args[2] {
-		case "client":
-			t := Client{
-				Dial: core.NewDialTCP(address, timeout),
-				Register: &virtual.RegisterReq{
-					Listen:   &core.Listen{Port: conv.String(port)},
-					Username: username,
-					Password: password,
-					Param:    nil,
-				},
-			}
-			ops := []virtual.Option(nil)
-			if len(proxy) > 0 {
-				ops = append(ops, virtual.WithOpenTCP(proxy, timeout))
-			}
-			logs.Err(t.DialTCP(ops...))
-
-		case "server":
-			t := Server{
-				Listen: &core.Listen{Port: conv.String(port)},
-				OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
-					return &core.Dial{
-						Type:    "tcp",
-						Address: proxy,
-					}, nil, nil
-				},
-				OnRegister: func(c net.Conn, r *virtual.RegisterReq) (string, error) {
-					_, err := Script.Exec(onRegister, func(i script.Client) {
-						i.Set("username", r.Username)
-						i.Set("password", r.Password)
-						for k, v := range r.Param {
-							i.Set(k, v)
-						}
-					})
-					return c.RemoteAddr().String(), err
-				},
-			}
-			logs.Err(t.Run())
-
-		}
-
-	}
-
 }

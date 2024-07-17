@@ -10,7 +10,7 @@ import (
 
 func init() {
 	//logs.SetFormatterWithTime()
-	//logs.SetLevel(logs.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 	logs.SetWriter(logs.Stdout)
 }
 
@@ -21,9 +21,9 @@ func main() {
 		OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
 			return &core.Dial{Address: ":80"}, nil, nil
 		},
-		OnRegister: func(c net.Conn, r *virtual.RegisterReq) (string, error) {
+		OnRegister: func(c net.Conn, v *virtual.Virtual, r *virtual.RegisterReq) error {
 			logs.Debug("注册信息: ", r)
-			return c.RemoteAddr().String(), nil
+			return nil
 		},
 	}
 	logs.Err(t.Run())

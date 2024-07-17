@@ -51,10 +51,14 @@ func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
 	}
 }
 
+func NewListenTCP(port string) *Listen {
+	return &Listen{Port: port}
+}
+
 type Listen struct {
-	Type  string `json:"type,omitempty"`
-	Port  string `json:"port"`
-	Param g.Map  `json:"param,omitempty"`
+	Type  string `json:"type,omitempty"`  //类型,TCP,UDP,Serial等
+	Port  string `json:"port"`            //例如串口是字符的,固使用字符类型
+	Param g.Map  `json:"param,omitempty"` //其他参数
 }
 
 func (this *Listen) Listener() (net.Listener, error) {
