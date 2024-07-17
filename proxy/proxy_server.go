@@ -31,19 +31,19 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 	var listener net.Listener
 
 	v := virtual.New(tun, virtual.WithKey(tun.RemoteAddr().String()))
-	v.SetOption(virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) error {
+	v.SetOption(virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) (interface{}, error) {
 		//解析注册数据
 		register := new(virtual.RegisterReq)
 		err := json.Unmarshal(p.GetData(), register)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		v.SetKey(p.GetKey())
 		//注册事件
 		if this.OnRegister != nil {
 			if err := this.OnRegister(tun, v, register); err != nil {
-				return err
+				return nil, err
 			}
 		}
 		//如果存在老的连接的话,会被覆盖,变成野连接,能收到数据,不能发数据,还是说关闭老连接?
@@ -52,7 +52,7 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 		//判断客户端是否需要监听端口
 		//客户端可以选择不监听端口,而由服务端进行安排
 		if register.Listen == nil || register.Listen.Port == "" {
-			return nil
+			return register.Listen, nil
 		}
 
 		{ //监听端口
@@ -66,7 +66,7 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 					if err != nil {
 						return err
 					}
-					logs.Infof("[%s] 代理至 [%s -> %s]\n", cKey, v.Key(), proxy.Address)
+					logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, v.Key(), proxy.Address)
 					return v.OpenAndSwap(c.RemoteAddr().String(), proxy, struct {
 						io.Reader
 						io.WriteCloser
@@ -82,11 +82,11 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 			})
 			if err != nil {
 				logs.Errf("[%s] 监听端口[:%s]失败: %s\n", p.GetKey(), register.Listen.Port, err.Error())
-				return err
+				return nil, err
 			}
 			logs.Infof("[%s] 请求监听[:%s]成功...\n", v.Key(), register.Listen.Port)
 		}
-		return nil
+		return register.Listen, nil
 	}))
 
 	defer func() {

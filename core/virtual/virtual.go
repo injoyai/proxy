@@ -61,7 +61,7 @@ func WithWait(timeout time.Duration) func(v *Virtual) {
 }
 
 // WithRegister 当客户端进行注册,处理校验客户端的信息
-func WithRegister(f func(v *Virtual, p Packet) error) func(v *Virtual) {
+func WithRegister(f func(v *Virtual, p Packet) (interface{}, error)) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.OnRegister = f
 	}
@@ -115,7 +115,7 @@ type Virtual struct {
 	*safe.Closer
 
 	open       func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)
-	OnRegister func(v *Virtual, p Packet) error
+	OnRegister func(v *Virtual, p Packet) (interface{}, error)
 	OnOpened   func(p Packet, d *core.Dial, key string)
 }
 
@@ -146,14 +146,11 @@ func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
 	return p
 }
 
-func (this *Virtual) Register(data interface{}) error {
+func (this *Virtual) Register(data interface{}) (interface{}, error) {
 	if err := this.WritePacket(this.Key(), Request|Register|NeedAck, data); err != nil {
-		return err
+		return nil, err
 	}
-	if _, err := this.Wait.Wait(this.Key()); err != nil {
-		return err
-	}
-	return nil
+	return this.Wait.Wait(this.Key())
 }
 
 func (this *Virtual) Open(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
@@ -241,10 +238,7 @@ func (this *Virtual) Run() (err error) {
 
 				if p.IsRequest() {
 					if this.OnRegister != nil {
-						if err := this.OnRegister(this, p); err != nil {
-							//this.Close()//关闭连接则无法发送错误信息
-							return nil, err
-						}
+						return this.OnRegister(this, p)
 					}
 
 				} else {

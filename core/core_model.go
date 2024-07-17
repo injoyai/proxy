@@ -26,10 +26,6 @@ type Dial struct {
 }
 
 func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
-	//if this.Timeout==0{
-	//	this.Timeout=10*time.Second
-	//}
-
 	switch strings.ToLower(this.Type) {
 	case "tcp":
 		c, err := net.DialTimeout(this.Type, this.Address, this.Timeout)

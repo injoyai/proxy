@@ -22,7 +22,7 @@ func main() {
 			return &core.Dial{Address: ":80"}, nil, nil
 		},
 		OnRegister: func(r io.ReadWriteCloser, v *virtual.Virtual, reg *virtual.RegisterReq) error {
-			logs.Debug("注册信息: ", r)
+			logs.Debug("注册信息: ", reg)
 			return nil
 		},
 	}

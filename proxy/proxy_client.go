@@ -1,6 +1,8 @@
 package proxy
 
 import (
+	"encoding/json"
+	"github.com/injoyai/conv"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
@@ -24,7 +26,7 @@ func (this *Client) DialTCP(op ...virtual.Option) error {
 	v := virtual.New(c)
 	v.SetKey(k)
 	v.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
-		logs.Infof("[%s -> %s] 代理至 %s\n", p.GetKey(), v.Key(), d.Address)
+		logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, v.Key(), d.Address)
 	}))
 	v.SetOption(op...)
 	defer v.Close()
@@ -32,7 +34,11 @@ func (this *Client) DialTCP(op ...virtual.Option) error {
 	go v.Run()
 
 	//注册到服务
-	if err := v.Register(this.Register); err != nil {
+	resp, err := v.Register(this.Register)
+	if err != nil {
+		return err
+	}
+	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
 		return err
 	}
 	logs.Infof("[%s] 注册至[%s]成功...\n", v.Key(), this.Dial.Address)
