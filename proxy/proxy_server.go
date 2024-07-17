@@ -12,10 +12,10 @@ import (
 )
 
 type Server struct {
-	Clients    *maps.Safe                                                           //客户端
-	Listen     *core.Listen                                                         //监听配置
-	OnRegister func(c net.Conn, key *virtual.Virtual, r *virtual.RegisterReq) error //注册事件
-	OnProxy    func(c net.Conn) (*core.Dial, []byte, error)                         //代理事件
+	Clients    *maps.Safe                                                                       //客户端
+	Listen     *core.Listen                                                                     //监听配置
+	OnRegister func(r io.ReadWriteCloser, key *virtual.Virtual, reg *virtual.RegisterReq) error //注册事件
+	OnProxy    func(r io.ReadWriteCloser) (*core.Dial, []byte, error)                           //代理事件
 }
 
 func (this *Server) Run() error {

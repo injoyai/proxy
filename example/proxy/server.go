@@ -5,7 +5,7 @@ import (
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/proxy"
-	"net"
+	"io"
 )
 
 func init() {
@@ -18,10 +18,10 @@ func main() {
 
 	t := proxy.Server{
 		Listen: &core.Listen{Port: "7000"},
-		OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
+		OnProxy: func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
 			return &core.Dial{Address: ":80"}, nil, nil
 		},
-		OnRegister: func(c net.Conn, v *virtual.Virtual, r *virtual.RegisterReq) error {
+		OnRegister: func(r io.ReadWriteCloser, v *virtual.Virtual, reg *virtual.RegisterReq) error {
 			logs.Debug("注册信息: ", r)
 			return nil
 		},

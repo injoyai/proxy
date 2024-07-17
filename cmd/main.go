@@ -13,7 +13,7 @@ import (
 	"github.com/injoyai/proxy/forward"
 	. "github.com/injoyai/proxy/proxy"
 	"github.com/spf13/cobra"
-	"net"
+	"io"
 	"strings"
 	"time"
 )
@@ -88,7 +88,7 @@ func main() {
 					{Name: "timeout", Memo: "超时时间", Short: "t"},
 					{Name: "username", Memo: "用户名", Short: "u"},
 					{Name: "password", Memo: "密码"},
-					{Name: "sn", Memo: "SN码"},
+					{Name: "key", Memo: "唯一标识"},
 				},
 				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
 					SetLevel(flag)
@@ -103,7 +103,7 @@ func main() {
 					timeout := flag.GetDuration("timeout", 5*time.Second)
 					username := flag.GetString("username")
 					password := flag.GetString("password")
-					sn := flag.GetString("sn")
+					key := flag.GetString("key")
 
 					if len(args) > 1 {
 						if ls := strings.SplitN(args[1], "<=", 2); len(ls) == 2 {
@@ -124,8 +124,8 @@ func main() {
 						},
 					}
 					ops := []virtual.Option{func(v *virtual.Virtual) {
-						if len(sn) > 0 {
-							v.SetKey(sn)
+						if len(key) > 0 {
+							v.SetKey(key)
 						}
 					}}
 					if len(proxy) > 0 {
@@ -169,24 +169,24 @@ func main() {
 
 					t := Server{
 						Listen: core.NewListenTCP(port),
-						OnProxy: func(c net.Conn) (*core.Dial, []byte, error) {
+						OnProxy: func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
 							if len(proxy) == 0 {
 								return nil, nil, nil
 							}
 							return core.NewDialTCP(proxy), nil, nil
 						},
-						OnRegister: func(c net.Conn, v *virtual.Virtual, r *virtual.RegisterReq) error {
+						OnRegister: func(r io.ReadWriteCloser, v *virtual.Virtual, reg *virtual.RegisterReq) error {
 							if len(listen) > 0 {
-								r.Listen = core.NewListenTCP(listen)
+								reg.Listen = core.NewListenTCP(listen)
 							}
 							if len(onRegister) == 0 {
 								return nil
 							}
 							result, err := Script.Exec(onRegister, func(i script.Client) {
-								i.Set("key", c.RemoteAddr().String())
-								i.Set("username", r.Username)
-								i.Set("password", r.Password)
-								for k, v := range r.Param {
+								i.Set("key", v.Key())
+								i.Set("username", reg.Username)
+								i.Set("password", reg.Password)
+								for k, v := range reg.Param {
 									i.Set(k, v)
 								}
 							})
