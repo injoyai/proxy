@@ -48,8 +48,8 @@ func main() {
 					Example: "proxy forward 8080->:80",
 				},
 				Flag: []*command.Flag{
-					{Name: "port", Memo: "监听端口", Short: "p", Default: "80"},
-					{Name: "proxy", Memo: "转发地址"},
+					{Name: "port", Memo: "监听端口", Short: "p", Default: cfg.GetString("port", "80")},
+					{Name: "proxy", Memo: "转发地址", Default: cfg.GetString("proxy")},
 				},
 				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
 					SetLevel(flag)
@@ -83,12 +83,12 @@ func main() {
 					Example: "proxy client xxx.xxx.xxx.xxx:7000 :10001<-20001",
 				},
 				Flag: []*command.Flag{
-					{Name: "port", Memo: "想让服务端监听的端口", Short: "p"},
-					{Name: "proxy", Memo: "客户端代理地址"},
-					{Name: "timeout", Memo: "超时时间", Short: "t"},
-					{Name: "username", Memo: "用户名", Short: "u"},
-					{Name: "password", Memo: "密码"},
-					{Name: "key", Memo: "唯一标识"},
+					{Name: "port", Memo: "想让服务端监听的端口", Short: "p", Default: cfg.GetString("port", "80")},
+					{Name: "proxy", Memo: "客户端代理地址", Default: cfg.GetString("proxy")},
+					{Name: "timeout", Memo: "超时时间", Short: "t", Default: cfg.GetString("timeout")},
+					{Name: "username", Memo: "用户名", Short: "u", Default: cfg.GetString("username")},
+					{Name: "password", Memo: "密码", Default: cfg.GetString("password")},
+					{Name: "key", Memo: "唯一标识", Default: cfg.GetString("key")},
 				},
 				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
 					SetLevel(flag)
@@ -144,10 +144,10 @@ func main() {
 					Example: "proxy server -p=7000 :10001<-20001",
 				},
 				Flag: []*command.Flag{
-					{Name: "port", Memo: "监听端口", Short: "p", Default: "7000"},
-					{Name: "proxy", Memo: "代理地址"},
-					{Name: "timeout", Memo: "超时时间", Short: "t"},
-					{Name: "listen", Memo: "监听端口"},
+					{Name: "port", Memo: "监听端口", Short: "p", Default: cfg.GetString("port", "7000")},
+					{Name: "proxy", Memo: "代理地址", Default: cfg.GetString("proxy")},
+					{Name: "timeout", Memo: "超时时间", Short: "t", Default: cfg.GetString("timeout")},
+					{Name: "listen", Memo: "监听端口", Default: cfg.GetString("listen")},
 				},
 				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
 					SetLevel(flag)
