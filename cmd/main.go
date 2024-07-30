@@ -59,10 +59,10 @@ func main() {
 					timeout := flag.GetDuration("timeout", 5*time.Second)
 
 					if len(args) > 0 {
-						if ls := strings.SplitN(args[0], "=>", 2); len(ls) == 2 {
+						if ls := strings.SplitN(args[0], "->", 2); len(ls) == 2 {
 							port = ls[0]
 							proxy = ls[1]
-						} else if ls := strings.SplitN(args[0], "<=", 2); len(ls) == 2 {
+						} else if ls := strings.SplitN(args[0], "<-", 2); len(ls) == 2 {
 							port = ls[1]
 							proxy = ls[0]
 						}
@@ -106,10 +106,10 @@ func main() {
 					key := flag.GetString("key")
 
 					if len(args) > 1 {
-						if ls := strings.SplitN(args[1], "<=", 2); len(ls) == 2 {
+						if ls := strings.SplitN(args[1], "<-", 2); len(ls) == 2 {
 							port = ls[1]
 							proxy = ls[0]
-						} else if ls := strings.SplitN(args[1], "=>", 2); len(ls) == 2 {
+						} else if ls := strings.SplitN(args[1], "->", 2); len(ls) == 2 {
 							port = ls[0]
 							proxy = ls[1]
 						}
@@ -158,10 +158,10 @@ func main() {
 					onRegister := flag.GetString("onRegister")
 
 					if len(args) > 0 {
-						if ls := strings.SplitN(args[0], "=>", 2); len(ls) == 2 {
+						if ls := strings.SplitN(args[0], "->", 2); len(ls) == 2 {
 							listen = ls[0]
 							proxy = ls[1]
-						} else if ls := strings.SplitN(args[0], "<=", 2); len(ls) == 2 {
+						} else if ls := strings.SplitN(args[0], "<-", 2); len(ls) == 2 {
 							listen = ls[1]
 							proxy = ls[0]
 						}
