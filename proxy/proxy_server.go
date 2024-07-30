@@ -66,14 +66,16 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 					if err != nil {
 						return err
 					}
-					logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, v.Key(), proxy.Address)
-					return v.OpenAndSwap(c.RemoteAddr().String(), proxy, struct {
-						io.Reader
-						io.WriteCloser
-					}{
-						Reader:      io.MultiReader(bytes.NewReader(prefix), c),
-						WriteCloser: c,
-					})
+					if proxy != nil {
+						logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, v.Key(), proxy.Address)
+						return v.OpenAndSwap(c.RemoteAddr().String(), proxy, struct {
+							io.Reader
+							io.WriteCloser
+						}{
+							Reader:      io.MultiReader(bytes.NewReader(prefix), c),
+							WriteCloser: c,
+						})
+					}
 				}
 
 				logs.Infof("[%s] 代理至 [%s]\n", cKey, v.Key())
