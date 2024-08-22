@@ -6,6 +6,7 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
+	"io"
 )
 
 type Client struct {
@@ -21,9 +22,12 @@ func (this *Client) DialTCP(op ...virtual.Option) error {
 		return err
 	}
 	defer c.Close()
+	return this.Run(k, c, op...)
+}
 
+func (this *Client) Run(k string, r io.ReadWriteCloser, op ...virtual.Option) error {
 	//虚拟设备管理,默认使用服务的代理配置代理
-	v := virtual.New(c)
+	v := virtual.New(r)
 	v.SetKey(k)
 	v.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
 		logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, v.Key(), d.Address)
