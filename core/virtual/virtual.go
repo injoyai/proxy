@@ -2,6 +2,7 @@ package virtual
 
 import (
 	"bufio"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"github.com/injoyai/base/maps"
@@ -93,6 +94,7 @@ func WithOpenTCP(address string, timeout ...time.Duration) func(v *Virtual) {
 func WithOpenCustom(proxy *core.Dial) func(v *Virtual) {
 	return func(v *Virtual) {
 		v.open = func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
+			*d = *proxy
 			return proxy.Dial()
 		}
 	}
@@ -164,8 +166,13 @@ func (this *Virtual) Open(k string, p *core.Dial, closer io.Closer) (io.ReadWrit
 	if err != nil {
 		return nil, err
 	}
+	res := new(core.DialRes)
+	if err := json.Unmarshal([]byte(val.(string)), res); err != nil {
+		return nil, err
+	}
+	*p = *res.Dial
 	//NewIO已缓存IO
-	return this.NewIO(val.(string), closer), nil
+	return this.NewIO(res.Key, closer), nil
 }
 
 func (this *Virtual) OpenAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
@@ -345,7 +352,7 @@ func (this *Virtual) Run() (err error) {
 					}()
 
 					//响应成功,并返回唯一标识
-					return key, nil
+					return core.DialRes{Key: key, Dial: d}, nil
 
 				} else {
 					//响应

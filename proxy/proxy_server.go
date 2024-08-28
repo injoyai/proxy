@@ -55,39 +55,49 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 			return register.Listen, nil
 		}
 
-		{ //监听端口
-			listener, err = register.Listen.GoListen(func(listener net.Listener, c net.Conn) error {
-				cKey := c.RemoteAddr().String()
-				defer logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
+		//监听端口
+		listener, err = register.Listen.GoListen(func(listener net.Listener, c net.Conn) error {
+			cKey := c.RemoteAddr().String()
+			defer logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
+			defer c.Close()
 
-				//使用自定义(服务端)代理
-				if this.OnProxy != nil {
-					proxy, prefix, err := this.OnProxy(c)
-					if err != nil {
-						return err
-					}
-					if proxy != nil {
-						logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, v.Key(), proxy.Address)
-						return v.OpenAndSwap(c.RemoteAddr().String(), proxy, struct {
-							io.Reader
-							io.WriteCloser
-						}{
-							Reader:      io.MultiReader(bytes.NewReader(prefix), c),
-							WriteCloser: c,
-						})
-					}
+			proxy := &core.Dial{}
+			prefix := []byte(nil)
+
+			//使用自定义(服务端)代理
+			if this.OnProxy != nil {
+				proxy, prefix, err = this.OnProxy(c)
+				if err != nil {
+					return err
 				}
-
-				logs.Infof("[%s] 代理至 [%s]\n", cKey, v.Key())
-				//使用默认(客户端)代理
-				return v.OpenAndSwap(c.RemoteAddr().String(), &core.Dial{}, c)
-			})
-			if err != nil {
-				logs.Errf("[%s] 监听端口[:%s]失败: %s\n", p.GetKey(), register.Listen.Port, err.Error())
-				return nil, err
 			}
-			logs.Infof("[%s] 请求监听[:%s]成功...\n", v.Key(), register.Listen.Port)
+			if proxy == nil {
+				proxy = &core.Dial{}
+			}
+
+			i, err := v.Open(cKey, proxy, c)
+			if err != nil {
+				return err
+			}
+			defer i.Close()
+
+			logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, v.Key(), proxy.Address)
+
+			return core.Swap(i, struct {
+				io.Reader
+				io.WriteCloser
+			}{
+				Reader:      io.MultiReader(bytes.NewReader(prefix), c),
+				WriteCloser: c,
+			})
+
+		})
+		if err != nil {
+			logs.Errf("[%s] 监听端口[:%s]失败: %s\n", p.GetKey(), register.Listen.Port, err.Error())
+			return nil, err
 		}
+		logs.Infof("[%s] 监听端口[:%s]成功...\n", v.Key(), register.Listen.Port)
+
 		return register.Listen, nil
 	}))
 
