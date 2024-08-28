@@ -6,47 +6,56 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
-	"io"
 )
 
 type Client struct {
 	SN       string               //唯一标识符
-	Dial     *core.Dial           //连接配置
+	Dialer   core.Dialer          //连接配置
 	Register *virtual.RegisterReq //注册配置
+	virtual  *virtual.Virtual     //虚拟设备管理
 }
 
-func (this *Client) DialTCP(op ...virtual.Option) error {
+func (this *Client) Close() error {
+	if this.virtual != nil {
+		return this.virtual.Close()
+	}
+	return nil
+}
+
+func (this *Client) Dial(op ...virtual.Option) error {
+
 	//连接到服务端
-	c, k, err := this.Dial.Dial()
+	c, k, err := this.Dialer.Dial()
 	if err != nil {
 		return err
 	}
 	defer c.Close()
-	return this.Run(k, c, op...)
-}
 
-func (this *Client) Run(k string, r io.ReadWriteCloser, op ...virtual.Option) error {
+	//如果存在则关闭老的
+	this.Close()
+
 	//虚拟设备管理,默认使用服务的代理配置代理
-	v := virtual.New(r)
-	v.SetKey(k)
-	v.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
-		logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, v.Key(), d.Address)
-	}))
-	v.SetOption(op...)
-	defer v.Close()
+	this.virtual = virtual.New(c)
 
-	go v.Run()
+	this.virtual.SetKey(k)
+	this.virtual.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
+		logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, this.virtual.Key(), d.Address)
+	}))
+	this.virtual.SetOption(op...)
+	defer this.virtual.Close()
+
+	go this.virtual.Run()
 
 	//注册到服务
-	resp, err := v.Register(this.Register)
+	resp, err := this.virtual.Register(this.Register)
 	if err != nil {
 		return err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
 		return err
 	}
-	logs.Infof("[%s] 注册至[%s]成功...\n", v.Key(), this.Dial.Address)
+	logs.Infof("[%s] 注册至服务成功...\n", this.virtual.Key())
 
-	<-v.Done()
-	return v.Err()
+	<-this.virtual.Done()
+	return this.virtual.Err()
 }
