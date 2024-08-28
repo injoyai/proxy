@@ -116,7 +116,7 @@ func main() {
 					}
 
 					t := Client{
-						Dial: core.NewDialTCP(args[0], timeout),
+						Dialer: core.NewDialTCP(args[0], timeout),
 						Register: &virtual.RegisterReq{
 							Listen:   core.NewListenTCP(port),
 							Username: username,
@@ -132,7 +132,7 @@ func main() {
 						ops = append(ops, virtual.WithOpenTCP(proxy, timeout))
 					}
 					for {
-						logs.Err(t.DialTCP(ops...))
+						logs.Err(t.Dial(ops...))
 						<-time.After(time.Second * 5)
 					}
 				},

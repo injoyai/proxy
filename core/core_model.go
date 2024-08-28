@@ -10,6 +10,14 @@ import (
 	"time"
 )
 
+type DialFunc func() (io.ReadWriteCloser, string, error)
+
+func (this DialFunc) Dial() (io.ReadWriteCloser, string, error) { return this() }
+
+type Dialer interface {
+	Dial() (io.ReadWriteCloser, string, error)
+}
+
 func NewDialTCP(address string, timeout ...time.Duration) *Dial {
 	return &Dial{
 		Type:    "tcp",
@@ -45,6 +53,11 @@ func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
 		}
 		return c, c.LocalAddr().String(), nil
 	}
+}
+
+type DialRes struct {
+	Key string `json:"key,omitempty"`
+	*Dial
 }
 
 func NewListenTCP(port string) *Listen {
