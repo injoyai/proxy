@@ -52,7 +52,8 @@ func (this *Client) Dial(op ...virtual.Option) error {
 		return err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
-		return err
+		//可能返回空字符,则解析失败
+		//return err
 	}
 	logs.Infof("[%s] 注册至服务成功...\n", this.virtual.Key())
 

@@ -8,7 +8,7 @@ import (
 )
 
 type RegisterReq struct {
-	Listen   *core.Listen `json:"listen"`             //监听信息
+	Listen   *core.Listen `json:"listen,omitempty"`   //监听信息
 	Username string       `json:"username,omitempty"` //用户名
 	Password string       `json:"password,omitempty"` //密码
 	Param    g.Map        `json:"param,omitempty"`    //其他参数
