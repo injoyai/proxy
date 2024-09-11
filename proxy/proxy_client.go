@@ -14,6 +14,10 @@ type Client struct {
 	virtual  *virtual.Virtual     //虚拟设备管理
 }
 
+func (this *Client) Virtual() *virtual.Virtual {
+	return this.virtual
+}
+
 func (this *Client) Close() error {
 	if this.virtual != nil {
 		return this.virtual.Close()
