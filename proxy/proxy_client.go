@@ -26,22 +26,22 @@ func (this *Client) Close() error {
 }
 
 func (this *Client) Run(op ...virtual.Option) error {
-	v, err := this.Dial(op...)
+	err := this.Dial(op...)
 	if err != nil {
 		return err
 	}
-	<-v.Done()
-	return v.Err()
+	<-this.Virtual().Done()
+	return this.Virtual().Err()
 }
 
-func (this *Client) Dial(op ...virtual.Option) (*virtual.Virtual, error) {
+func (this *Client) Dial(op ...virtual.Option) error {
 	//关闭老的连接,如果存在
 	this.Close()
 
 	//连接到服务端
 	c, k, err := this.Dialer.Dial()
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer c.Close()
 
@@ -65,7 +65,7 @@ func (this *Client) Dial(op ...virtual.Option) (*virtual.Virtual, error) {
 	//注册到服务
 	resp, err := this.virtual.Register(this.Register)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
 		//可能返回空字符,则解析失败
@@ -73,5 +73,5 @@ func (this *Client) Dial(op ...virtual.Option) (*virtual.Virtual, error) {
 	}
 	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", this.virtual.Key())
 
-	return this.virtual, nil
+	return nil
 }
