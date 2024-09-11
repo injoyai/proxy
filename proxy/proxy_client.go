@@ -8,7 +8,6 @@ import (
 )
 
 type Client struct {
-	SN       string               //唯一标识符
 	Dialer   core.Dialer          //连接配置
 	Register *virtual.RegisterReq //注册配置
 	virtual  *virtual.Virtual     //虚拟设备管理
@@ -59,6 +58,7 @@ func (this *Client) Dial(op ...virtual.Option) error {
 	this.virtual.SetOption(op...)
 
 	go this.virtual.Run()
+
 	//注册到服务
 	resp, err := this.virtual.Register(this.Register)
 	if err != nil {

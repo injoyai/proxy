@@ -16,7 +16,7 @@ func main() {
 	for {
 		t := proxy.Client{
 			Dialer: &core.Dial{
-				Address: "127.0.0.1:7000",
+				Address: "127.0.0.1:10007",
 				Timeout: time.Second * 2,
 			},
 			Register: &virtual.RegisterReq{
@@ -29,7 +29,7 @@ func main() {
 			},
 		}
 		logs.Err(t.Run(
-			//virtual.WithOpenTCP("192.168.10.24:10001"),
+			virtual.WithOpenTCP("127.0.0.1:80"),
 			virtual.WithKey("ABC"),
 		))
 		<-time.After(time.Second * 5)
