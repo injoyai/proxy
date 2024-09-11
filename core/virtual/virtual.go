@@ -10,9 +10,9 @@ import (
 	"github.com/injoyai/base/safe"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/goutil/g"
-	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"io"
+	"sync/atomic"
 	"time"
 )
 
@@ -115,6 +115,7 @@ type Virtual struct {
 	IO   *maps.Safe
 	Wait *wait.Entity
 	*safe.Closer
+	running uint32
 
 	open       func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)
 	OnRegister func(v *Virtual, p Packet) (interface{}, error)
@@ -144,7 +145,7 @@ func (this *Virtual) WritePacket(k string, t byte, i interface{}) error {
 
 func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
 	p := this.f.NewPacket(k, t, i)
-	logs.Write(p)
+	core.DefaultLog.Write(p)
 	return p
 }
 
@@ -187,8 +188,6 @@ func (this *Virtual) OpenAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) e
 	return err
 }
 
-//func (this *Virtual)DialWithTimeout(address string, timeout time.Duration) (io.ReadWriteCloser, error)
-
 func (this *Virtual) WriteTo(key string, p []byte) error {
 	i := this.GetIO(key)
 	if i != nil {
@@ -226,7 +225,16 @@ func (this *Virtual) NewIO(key string, closer io.Closer) *IO {
 }
 
 func (this *Virtual) Run() (err error) {
-	defer func() { this.CloseWithErr(err) }()
+
+	if !atomic.CompareAndSwapUint32(&this.running, 0, 1) {
+		<-this.Done()
+		return this.Err()
+	}
+
+	defer func() {
+		this.CloseWithErr(err)
+		atomic.StoreUint32(&this.running, 0)
+	}()
 	buf := bufio.NewReader(this.r)
 	for {
 		//按照协议去读取数据
@@ -234,7 +242,7 @@ func (this *Virtual) Run() (err error) {
 		if err != nil {
 			return err
 		}
-		logs.Read(p)
+		core.DefaultLog.Read(p)
 
 		//处理代理数据
 		data, err := func() (interface{}, error) {
@@ -336,18 +344,18 @@ func (this *Virtual) Run() (err error) {
 					i := this.NewIO(key, c)
 					go func() {
 						defer func() {
-							logs.Tracef("[%s] 关闭连接,%v\n", key, i.Err())
+							core.DefaultLog.Tracef("[%s] 关闭连接,%v\n", key, i.Err())
 							c.Close()
 							i.Close()
 						}()
 
 						go func() {
 							_, err := io.Copy(c, i)
-							logs.PrintErr(err)
+							core.DefaultLog.PrintErr(err)
 							i.CloseWithErr(err)
 						}()
 						_, err := io.Copy(i, c)
-						logs.PrintErr(err)
+						core.DefaultLog.PrintErr(err)
 						i.CloseWithErr(err)
 					}()
 
@@ -386,10 +394,10 @@ func (this *Virtual) Run() (err error) {
 		if p.IsRequest() && p.NeedAck() {
 			if err != nil {
 				err = this.WritePacket(p.GetKey(), p.GetType()|Response|Fail, err)
-				logs.PrintErr(err)
+				core.DefaultLog.PrintErr(err)
 			} else {
 				err = this.WritePacket(p.GetKey(), p.GetType()|Response|Success, data)
-				logs.PrintErr(err)
+				core.DefaultLog.PrintErr(err)
 			}
 		}
 

@@ -3,7 +3,6 @@ package virtual
 import (
 	"encoding/json"
 	"github.com/injoyai/goutil/g"
-	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 )
 
@@ -16,6 +15,6 @@ type RegisterReq struct {
 
 func (this *RegisterReq) String() string {
 	bs, err := json.Marshal(this)
-	logs.PrintErr(err)
+	core.DefaultLog.PrintErr(err)
 	return string(bs)
 }

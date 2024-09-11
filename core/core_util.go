@@ -2,7 +2,6 @@ package core
 
 import (
 	"fmt"
-	"github.com/injoyai/logs"
 	"io"
 	"net"
 )
@@ -17,7 +16,7 @@ func Swap(c1, c2 io.ReadWriteCloser) error {
 }
 
 func WithListenLog(l net.Listener) {
-	logs.Infof("[%s] 监听成功...\n", l.Addr().String())
+	DefaultLog.Infof("[%s] 监听成功...\n", l.Addr().String())
 }
 
 func RunListen(network string, port int, onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {

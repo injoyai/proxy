@@ -9,9 +9,7 @@ import (
 )
 
 func init() {
-	//logs.SetFormatterWithTime()
-	logs.SetLevel(logs.LevelInfo)
-	logs.SetWriter(logs.Stdout)
+	core.DefaultLog.(interface{ SetLevel(n logs.Level) }).SetLevel(logs.LevelInfo)
 }
 
 func main() {
@@ -30,7 +28,7 @@ func main() {
 				Password: "password",
 			},
 		}
-		logs.Err(t.Dial(
+		logs.Err(t.Run(
 			//virtual.WithOpenTCP("192.168.10.24:10001"),
 			virtual.WithKey("ABC"),
 		))

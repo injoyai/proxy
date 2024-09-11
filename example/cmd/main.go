@@ -7,7 +7,6 @@ import (
 	"github.com/injoyai/goutil/other/command"
 	"github.com/injoyai/goutil/script"
 	"github.com/injoyai/goutil/script/js"
-	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/forward"
@@ -19,14 +18,11 @@ import (
 )
 
 func init() {
-	//设置日志只输出到控制台
-	logs.SetWriter(logs.Stdout)
-
 	//设置日志前缀为时间(不包括日期)
-	logs.SetFormatterWithTime()
+	core.DefaultLog.(interface{ SetFormatterWithTime() }).SetFormatterWithTime()
 
 	//设置日志不显示颜色
-	logs.SetShowColor(false)
+	core.DefaultLog.(interface{ SetShowColor(b ...bool) }).SetShowColor(false)
 }
 
 var (
@@ -73,7 +69,7 @@ func main() {
 						Forward: core.NewDialTCP(proxy, timeout),
 					}
 
-					logs.Err(p.ListenTCP())
+					core.DefaultLog.Errf("listen err: %v", p.ListenTCP())
 				},
 			},
 			{
@@ -132,7 +128,7 @@ func main() {
 						ops = append(ops, virtual.WithOpenTCP(proxy, timeout))
 					}
 					for {
-						logs.Err(t.Dial(ops...))
+						core.DefaultLog.Errf("dial err: %v", t.Run(ops...))
 						<-time.After(time.Second * 5)
 					}
 				},
@@ -196,7 +192,7 @@ func main() {
 							return err
 						},
 					}
-					logs.Err(t.Run())
+					core.DefaultLog.Errf("listen err: %v", t.Run())
 				},
 			},
 		},
@@ -207,28 +203,7 @@ func main() {
 }
 
 func SetLevel(flag *command.Flags) {
-	logs.SetLevel(func() logs.Level {
-		switch strings.ToLower(flag.GetString("log.level")) {
-		case "all":
-			return logs.LevelAll
-		case "trace":
-			return logs.LevelTrace
-		case "debug":
-			return logs.LevelDebug
-		case "write":
-			return logs.LevelWrite
-		case "read":
-			return logs.LevelRead
-		case "info":
-			return logs.LevelInfo
-		case "warn":
-			return logs.LevelWarn
-		case "error", "err":
-			return logs.LevelError
-		case "none":
-			return logs.LevelNone
-		default:
-			return logs.LevelInfo
-		}
-	}())
+	core.DefaultLog.(interface {
+		SetLevelStr(level string)
+	}).SetLevelStr(flag.GetString("log.level"))
 }

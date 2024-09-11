@@ -3,7 +3,6 @@ package proxy
 import (
 	"encoding/json"
 	"github.com/injoyai/conv"
-	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 )
@@ -22,12 +21,23 @@ func (this *Client) Close() error {
 	return nil
 }
 
-func (this *Client) Dial(op ...virtual.Option) error {
+func (this *Client) Run(op ...virtual.Option) error {
+	v, err := this.Dial(op...)
+	if err != nil {
+		return err
+	}
+	<-v.Done()
+	return v.Err()
+}
+
+func (this *Client) Dial(op ...virtual.Option) (*virtual.Virtual, error) {
+	//关闭老的连接,如果存在
+	this.Close()
 
 	//连接到服务端
 	c, k, err := this.Dialer.Dial()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer c.Close()
 
@@ -39,24 +49,25 @@ func (this *Client) Dial(op ...virtual.Option) error {
 
 	this.virtual.SetKey(k)
 	this.virtual.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
-		logs.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, this.virtual.Key(), d.Address)
+		if this.Register.Listen == nil || this.Register.Listen.Port == "" {
+			core.DefaultLog.Infof("[%s] 代理至 [%s -> %s]\n", p.GetKey(), this.virtual.Key(), d.Address)
+			return
+		}
+		core.DefaultLog.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, this.virtual.Key(), d.Address)
 	}))
 	this.virtual.SetOption(op...)
-	defer this.virtual.Close()
 
 	go this.virtual.Run()
-
 	//注册到服务
 	resp, err := this.virtual.Register(this.Register)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
 		//可能返回空字符,则解析失败
 		//return err
 	}
-	logs.Infof("[%s] 注册至服务成功...\n", this.virtual.Key())
+	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", this.virtual.Key())
 
-	<-this.virtual.Done()
-	return this.virtual.Err()
+	return this.virtual, nil
 }

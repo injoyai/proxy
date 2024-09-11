@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"github.com/injoyai/conv"
-	"github.com/injoyai/logs"
 	"io"
 	"strings"
 )
@@ -134,7 +133,7 @@ func (this *frame) NewPacket(k string, t byte, d interface{}) Packet {
 }
 
 func (this *frame) WritePacket(w io.Writer, p Packet) error {
-	logs.Write(p)
+	//core.DefaultLog.Write(p.Bytes())
 	_, err := w.Write(p.Bytes())
 	return err
 }

@@ -3,6 +3,7 @@ module github.com/injoyai/proxy
 go 1.20
 
 require (
+	github.com/fatih/color v1.14.1
 	github.com/injoyai/base v1.0.15
 	github.com/injoyai/conv v1.1.7
 	github.com/injoyai/goutil v0.0.0-20240712153111-79e77890c723
@@ -16,7 +17,6 @@ require (
 	github.com/andybalholm/cascadia v1.3.1 // indirect
 	github.com/creack/goselect v0.1.2 // indirect
 	github.com/eclipse/paho.mqtt.golang v1.4.2 // indirect
-	github.com/fatih/color v1.14.1 // indirect
 	github.com/go-ole/go-ole v1.2.6 // indirect
 	github.com/go-toast/toast v0.0.0-20190211030409-01e6764cf0a4 // indirect
 	github.com/goburrow/serial v0.1.0 // indirect

@@ -9,9 +9,7 @@ import (
 )
 
 func init() {
-	//logs.SetFormatterWithTime()
-	logs.SetLevel(logs.LevelInfo)
-	logs.SetWriter(logs.Stdout)
+	core.DefaultLog.(interface{ SetLevel(n logs.Level) }).SetLevel(logs.LevelInfo)
 }
 
 func main() {
