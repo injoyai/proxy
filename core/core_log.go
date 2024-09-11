@@ -6,6 +6,17 @@ import (
 	"strings"
 )
 
+type Level int
+
+const (
+	LevelTrace Level = iota
+	LevelRead
+	LevelWrite
+	LevelInfo
+	LevelError
+	LevelNone
+)
+
 var DefaultLog Log = &_log{
 	trace: logs.NewEntity("跟踪").SetSelfLevel(logs.LevelTrace).SetColor(color.FgGreen),
 	read:  logs.NewEntity("读取").SetSelfLevel(logs.LevelRead).SetColor(color.FgBlue),
@@ -21,6 +32,7 @@ type Log interface {
 	Infof(format string, args ...interface{})
 	Errf(format string, args ...interface{})
 	PrintErr(err error)
+	SetLevel(level Level)
 }
 
 type _log struct {
@@ -57,12 +69,27 @@ func (this *_log) PrintErr(err error) {
 	}
 }
 
-func (this *_log) SetLevel(level logs.Level) {
-	this.trace.SetSelfLevel(level)
-	this.read.SetSelfLevel(level)
-	this.write.SetSelfLevel(level)
-	this.info.SetSelfLevel(level)
-	this.err.SetSelfLevel(level)
+func (this *_log) SetLevel(level Level) {
+	l := logs.LevelInfo
+	switch level {
+	case LevelTrace:
+		l = logs.LevelTrace
+	case LevelRead:
+		l = logs.LevelRead
+	case LevelWrite:
+		l = logs.LevelWrite
+	case LevelInfo:
+		l = logs.LevelInfo
+	case LevelError:
+		l = logs.LevelError
+	case LevelNone:
+		l = logs.LevelNone
+	}
+	this.trace.SetLevel(l)
+	this.read.SetLevel(l)
+	this.write.SetLevel(l)
+	this.info.SetLevel(l)
+	this.err.SetLevel(l)
 }
 
 func (this *_log) SetLevelStr(level string) {
@@ -89,7 +116,11 @@ func (this *_log) SetLevelStr(level string) {
 	default:
 		l = logs.LevelInfo
 	}
-	this.SetLevel(l)
+	this.trace.SetLevel(l)
+	this.read.SetLevel(l)
+	this.write.SetLevel(l)
+	this.info.SetLevel(l)
+	this.err.SetLevel(l)
 }
 
 func (this *_log) SetFormatterWithTime() {
