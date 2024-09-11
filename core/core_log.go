@@ -18,11 +18,11 @@ const (
 )
 
 var DefaultLog Log = &_log{
-	trace: logs.NewEntity("跟踪").SetSelfLevel(logs.LevelTrace).SetColor(color.FgGreen),
-	read:  logs.NewEntity("读取").SetSelfLevel(logs.LevelRead).SetColor(color.FgBlue),
-	write: logs.NewEntity("写入").SetSelfLevel(logs.LevelWrite).SetColor(color.FgBlue),
-	info:  logs.NewEntity("信息").SetSelfLevel(logs.LevelInfo).SetColor(color.FgCyan),
-	err:   logs.NewEntity("错误").SetSelfLevel(logs.LevelError).SetColor(color.FgRed),
+	trace: logs.NewEntity("跟踪").SetSelfLevel(logs.LevelTrace).SetCaller(1).SetColor(color.FgGreen),
+	read:  logs.NewEntity("读取").SetSelfLevel(logs.LevelRead).SetCaller(1).SetColor(color.FgBlue),
+	write: logs.NewEntity("写入").SetSelfLevel(logs.LevelWrite).SetCaller(1).SetColor(color.FgBlue),
+	info:  logs.NewEntity("信息").SetSelfLevel(logs.LevelInfo).SetCaller(1).SetColor(color.FgCyan),
+	err:   logs.NewEntity("错误").SetSelfLevel(logs.LevelError).SetCaller(1).SetColor(color.FgRed),
 }
 
 type Log interface {

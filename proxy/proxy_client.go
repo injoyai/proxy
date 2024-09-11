@@ -35,15 +35,12 @@ func (this *Client) Run(op ...virtual.Option) error {
 }
 
 func (this *Client) Dial(op ...virtual.Option) error {
-	//关闭老的连接,如果存在
-	this.Close()
 
 	//连接到服务端
 	c, k, err := this.Dialer.Dial()
 	if err != nil {
 		return err
 	}
-	defer c.Close()
 
 	//如果存在则关闭老的
 	this.Close()
