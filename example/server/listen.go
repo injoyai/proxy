@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/injoyai/base/chans"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/logs"
@@ -13,7 +12,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/http/httputil"
 	"strings"
+	"sync/atomic"
+	"time"
 )
 
 type Listen struct {
@@ -56,13 +58,23 @@ Content-Type: application/json;charset=utf-8
 		return err
 	}
 
+	co := atomic.Int32{}
+	go func() {
+		for {
+			<-time.After(time.Second * 5)
+			logs.Debug("客户端数量:", co.Load())
+		}
+	}()
+
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			return err
 		}
 		go func() {
+			co.Add(1)
 			defer c.Close()
+			defer co.Add(-1)
 			err = this.handler(c)
 			logs.PrintErr(err)
 		}()
@@ -72,10 +84,12 @@ Content-Type: application/json;charset=utf-8
 func (this *Listen) handler(c net.Conn) error {
 
 	buf := bufio.NewReader(c)
-	prefix, err := buf.Peek(120)
+	prefix, err := buf.Peek(80)
 	if err != nil {
 		return err
 	}
+	logs.Debug(strings.Split(string(prefix), "\n")[0])
+	defer logs.Debug(strings.Split(string(prefix), "\n")[0], "close")
 
 	switch {
 	case bytes.HasPrefix(prefix, []byte("GET "+this.IndexPath+" ")) ||
@@ -106,24 +120,24 @@ func (this *Listen) handler(c net.Conn) error {
 			return nil
 		}
 
-		cc := Tunnel.Clients.MustGet(sn)
-		if cc == nil {
+		v := Tunnel.Clients.MustGet(sn)
+		if v == nil {
 			c.Write([]byte(this.MsgOffline))
 			return nil
 		}
 
-		//这个可以预防读取到io.EOF而产生关闭
-		ch := chans.NewIO(1)
-		ch.Write([]byte("GET / HTTP/1.1\r\nHost: localhost\r\n\r\n"))
-		defer ch.Close()
-		return cc.(*virtual.Virtual).OpenAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		bs, err := httputil.DumpRequest(r, true)
+		if err != nil {
+			return err
+		}
+		c1 := bytes.NewReader(bs)
+		return v.(*virtual.Virtual).OpenAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
-		}{ch, c, c})
+		}{io.MultiReader(c1, c), c, c})
 
 	default:
-		logs.Debug(string(prefix))
 		ipv4 := strings.Split(c.RemoteAddr().String(), ":")[0]
 		val, ok := this.Select.Get(ipv4)
 		if !ok {
@@ -131,13 +145,12 @@ func (this *Listen) handler(c net.Conn) error {
 			return nil
 		}
 		info := val.(*Info)
-		cc := Tunnel.Clients.MustGet(info.SN)
-		if cc == nil {
+		v := Tunnel.Clients.MustGet(info.SN)
+		if v == nil {
 			c.Write([]byte(this.MsgOffline))
 			return nil
 		}
-		defer logs.Debug(666, string(prefix))
-		return cc.(*virtual.Virtual).OpenAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*virtual.Virtual).OpenAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer

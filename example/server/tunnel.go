@@ -15,7 +15,7 @@ var (
 )
 
 func RunTunnel(port int) error {
-	//core.DefaultLog.SetLevel(core.LevelInfo)
+	core.DefaultLog.SetLevel(core.LevelInfo)
 	Tunnel = &proxy.Server{
 		Clients: maps.NewSafe(),
 		Listen:  core.NewListenTCP(port),
