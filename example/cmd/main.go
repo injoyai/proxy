@@ -94,7 +94,7 @@ func main() {
 						return
 					}
 
-					port := flag.GetString("port")
+					port := flag.GetInt("port")
 					proxy := flag.GetString("proxy")
 					timeout := flag.GetDuration("timeout", 5*time.Second)
 					username := flag.GetString("username")
@@ -103,10 +103,10 @@ func main() {
 
 					if len(args) > 1 {
 						if ls := strings.SplitN(args[1], "<-", 2); len(ls) == 2 {
-							port = ls[1]
+							port = conv.Int(ls[1])
 							proxy = ls[0]
 						} else if ls := strings.SplitN(args[1], "->", 2); len(ls) == 2 {
-							port = ls[0]
+							port = conv.Int(ls[0])
 							proxy = ls[1]
 						}
 					}
@@ -148,17 +148,17 @@ func main() {
 				Run: func(cmd *cobra.Command, args []string, flag *command.Flags) {
 					SetLevel(flag)
 
-					port := flag.GetString("port")
+					port := flag.GetInt("port")
 					proxy := flag.GetString("proxy")
-					listen := flag.GetString("listen")
+					listen := flag.GetInt("listen")
 					onRegister := flag.GetString("onRegister")
 
 					if len(args) > 0 {
 						if ls := strings.SplitN(args[0], "->", 2); len(ls) == 2 {
-							listen = ls[0]
+							listen = conv.Int(ls[0])
 							proxy = ls[1]
 						} else if ls := strings.SplitN(args[0], "<-", 2); len(ls) == 2 {
-							listen = ls[1]
+							listen = conv.Int(ls[1])
 							proxy = ls[0]
 						}
 					}
@@ -172,7 +172,7 @@ func main() {
 							return core.NewDialTCP(proxy), nil, nil
 						},
 						OnRegister: func(r io.ReadWriteCloser, v *virtual.Virtual, reg *virtual.RegisterReq) error {
-							if len(listen) > 0 {
+							if listen > 0 {
 								reg.Listen = core.NewListenTCP(listen)
 							}
 							if len(onRegister) == 0 {

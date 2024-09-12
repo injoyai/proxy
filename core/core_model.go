@@ -6,6 +6,7 @@ import (
 	"github.com/injoyai/goutil/g"
 	"io"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -60,8 +61,8 @@ type DialRes struct {
 	*Dial
 }
 
-func NewListenTCP(port string) *Listen {
-	return &Listen{Port: port}
+func NewListenTCP(port int) *Listen {
+	return &Listen{Port: strconv.Itoa(port)}
 }
 
 type Listen struct {

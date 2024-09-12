@@ -10,7 +10,7 @@ import (
 */
 func main() {
 	f := forward.Forward{
-		Listen:  core.NewListenTCP("20002"),
+		Listen:  core.NewListenTCP(20002),
 		Forward: core.NewDialTCP("192.168.10.187:10001"),
 	}
 	f.ListenTCP()
