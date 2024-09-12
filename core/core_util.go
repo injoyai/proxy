@@ -6,6 +6,26 @@ import (
 	"net"
 )
 
+func CopyBufferWith(r io.Reader, w io.Writer, buf []byte, f func(p []byte) ([]byte, error)) error {
+	if len(buf) == 0 {
+		//未声明或者cap为0的情况,重新声明
+		buf = make([]byte, 1024*4)
+	}
+	for {
+		n, err := r.Read(buf)
+		if err != nil {
+			return err
+		}
+		bs, err := f(buf[:n])
+		if err != nil {
+			return err
+		}
+		if _, err = w.Write(bs); err != nil {
+			return err
+		}
+	}
+}
+
 // Swap 交换数据
 func Swap(c1, c2 io.ReadWriteCloser) error {
 	defer c1.Close()

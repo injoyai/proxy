@@ -107,6 +107,13 @@ func WithOpenRemote() func(v *Virtual) {
 	})
 }
 
+// WithBufferSize 设置复制的buffer大小
+func WithBufferSize(size uint) func(v *Virtual) {
+	return func(v *Virtual) {
+		v.CopyBufferSize = size
+	}
+}
+
 // Virtual 虚拟设备管理,收到的数据自动转发到对应的IO
 type Virtual struct {
 	k    string
@@ -115,11 +122,14 @@ type Virtual struct {
 	IO   *maps.Safe
 	Wait *wait.Entity
 	*safe.Closer
-	running uint32
+	running        uint32
+	CopyBufferSize uint //复制的buffer大小
 
 	open       func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)
 	OnRegister func(v *Virtual, p Packet) (interface{}, error)
 	OnOpened   func(p Packet, d *core.Dial, key string)
+	OnRequest  func(p []byte) ([]byte, error) //copy的请求数据
+	OnResponse func(p []byte) ([]byte, error) //copy的响应数据
 }
 
 func (this *Virtual) Key() string {
@@ -350,11 +360,23 @@ func (this *Virtual) Run() (err error) {
 						}()
 
 						go func() {
-							_, err := io.Copy(c, i)
+							//_, err := io.Copy(c, i)
+							err = core.CopyBufferWith(i, c, make([]byte, this.CopyBufferSize), func(p []byte) ([]byte, error) {
+								if this.OnRequest != nil {
+									return this.OnRequest(p)
+								}
+								return p, nil
+							})
 							core.DefaultLog.PrintErr(err)
 							i.CloseWithErr(err)
 						}()
-						_, err := io.Copy(i, c)
+						//_, err := io.Copy(i, c)
+						err = core.CopyBufferWith(c, i, make([]byte, this.CopyBufferSize), func(p []byte) ([]byte, error) {
+							if this.OnResponse != nil {
+								return this.OnResponse(p)
+							}
+							return p, nil
+						})
 						core.DefaultLog.PrintErr(err)
 						i.CloseWithErr(err)
 					}()
