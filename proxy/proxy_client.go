@@ -46,22 +46,22 @@ func (this *Client) Dial(op ...virtual.Option) error {
 
 	//虚拟设备管理,默认使用服务的代理配置代理
 	this.virtual = virtual.New(c)
-
 	this.virtual.SetKey(k)
 	this.virtual.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
-		if this.Register.Listen == nil || this.Register.Listen.Port == "" {
+		if this.Register == nil || this.Register.Listen == nil || this.Register.Listen.Port == "" {
 			core.DefaultLog.Infof("[%s] 代理至 [%s -> %s]\n", p.GetKey(), this.virtual.Key(), d.Address)
 			return
 		}
 		core.DefaultLog.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, this.virtual.Key(), d.Address)
 	}))
 	this.virtual.SetOption(op...)
-
 	go this.virtual.Run()
 
 	//注册到服务
 	resp, err := this.virtual.Register(this.Register)
 	if err != nil {
+		//注册失败则关闭虚拟通道
+		this.virtual.CloseWithErr(err)
 		return err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
