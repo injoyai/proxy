@@ -14,8 +14,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"strings"
-	"sync/atomic"
-	"time"
 )
 
 type Listen struct {
@@ -58,23 +56,13 @@ Content-Type: application/json;charset=utf-8
 		return err
 	}
 
-	co := atomic.Int32{}
-	go func() {
-		for {
-			<-time.After(time.Second * 5)
-			logs.Debug("客户端数量:", co.Load())
-		}
-	}()
-
 	for {
 		c, err := l.Accept()
 		if err != nil {
 			return err
 		}
 		go func() {
-			co.Add(1)
 			defer c.Close()
-			defer co.Add(-1)
 			err = this.handler(c)
 			logs.PrintErr(err)
 		}()
@@ -88,8 +76,6 @@ func (this *Listen) handler(c net.Conn) error {
 	if err != nil {
 		return err
 	}
-	logs.Debug(strings.Split(string(prefix), "\n")[0])
-	defer logs.Debug(strings.Split(string(prefix), "\n")[0], "close")
 
 	switch {
 	case bytes.HasPrefix(prefix, []byte("GET "+this.IndexPath+" ")) ||
