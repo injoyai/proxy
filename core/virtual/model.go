@@ -2,7 +2,7 @@ package virtual
 
 import (
 	"encoding/json"
-	"github.com/injoyai/goutil/g"
+	"github.com/injoyai/base/g"
 	"github.com/injoyai/proxy/core"
 )
 

@@ -56,6 +56,7 @@ Content-Type: application/json;charset=utf-8
 		return err
 	}
 
+	logs.Infof("监听端口:%d\n", this.Port)
 	for {
 		c, err := l.Accept()
 		if err != nil {
@@ -106,7 +107,7 @@ func (this *Listen) handler(c net.Conn) error {
 			return nil
 		}
 
-		v := Tunnel.Clients.MustGet(sn)
+		v := Tunnel.Clients.MustGet(info.SN)
 		if v == nil {
 			c.Write([]byte(this.MsgOffline))
 			return nil
@@ -117,7 +118,7 @@ func (this *Listen) handler(c net.Conn) error {
 			return err
 		}
 		c1 := bytes.NewReader(bs)
-		return v.(*virtual.Virtual).OpenAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*virtual.Virtual).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
@@ -136,7 +137,7 @@ func (this *Listen) handler(c net.Conn) error {
 			c.Write([]byte(this.MsgOffline))
 			return nil
 		}
-		return v.(*virtual.Virtual).OpenAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*virtual.Virtual).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
