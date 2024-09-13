@@ -11,10 +11,12 @@ import (
 )
 
 type Server struct {
-	Clients    *maps.Safe                                                                       //客户端
-	Listen     *core.Listen                                                                     //监听配置
-	OnRegister func(r io.ReadWriteCloser, key *virtual.Virtual, reg *virtual.RegisterReq) error //注册事件
-	OnProxy    func(r io.ReadWriteCloser) (*core.Dial, []byte, error)                           //代理事件
+	Clients     *maps.Safe                                                                       //客户端
+	Listen      *core.Listen                                                                     //监听配置
+	OnRegister  func(r io.ReadWriteCloser, key *virtual.Virtual, reg *virtual.RegisterReq) error //注册事件
+	OnProxy     func(r io.ReadWriteCloser) (*core.Dial, []byte, error)                           //代理事件
+	OnConnected func(r io.ReadWriteCloser, key *virtual.Virtual)                                 //
+	OnClosed    func(key *virtual.Virtual, err error)                                            //关闭事件
 }
 
 func (this *Server) Run() error {
@@ -25,7 +27,7 @@ func (this *Server) Run() error {
 }
 
 // Handler 对客户端进行注册验证操作
-func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
+func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 
 	var listener net.Listener
 
@@ -74,7 +76,7 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 				proxy = &core.Dial{}
 			}
 
-			i, err := v.Open(cKey, proxy, c)
+			i, err := v.Dial(cKey, proxy, c)
 			if err != nil {
 				return err
 			}
@@ -100,10 +102,17 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) error {
 		return register.Listen, nil
 	}))
 
+	if this.OnConnected != nil {
+		this.OnConnected(tun, v)
+	}
+
 	defer func() {
 		this.Clients.Del(v.Key())
 		tun.Close()
 		v.Close()
+		if this.OnClosed != nil {
+			this.OnClosed(v, err)
+		}
 		if listener != nil {
 			listener.Close()
 			core.DefaultLog.Infof("[%s] 关闭监听...\n", listener.Addr().String())

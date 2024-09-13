@@ -47,7 +47,7 @@ func (this *Client) Dial(op ...virtual.Option) error {
 	//虚拟设备管理,默认使用服务的代理配置代理
 	this.virtual = virtual.New(c)
 	this.virtual.SetKey(k)
-	this.virtual.SetOption(virtual.WithOpened(func(p virtual.Packet, d *core.Dial, key string) {
+	this.virtual.SetOption(virtual.WithDialed(func(p virtual.Packet, d *core.Dial, key string) {
 		if this.Register == nil || this.Register.Listen == nil || this.Register.Listen.Port == "" {
 			core.DefaultLog.Infof("[%s] 代理至 [%s -> %s]\n", p.GetKey(), this.virtual.Key(), d.Address)
 			return
