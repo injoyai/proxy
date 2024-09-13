@@ -125,7 +125,7 @@ func main() {
 						}
 					}}
 					if len(proxy) > 0 {
-						ops = append(ops, virtual.WithOpenTCP(proxy, timeout))
+						ops = append(ops, virtual.WithDialTCP(proxy, timeout))
 					}
 					for {
 						core.DefaultLog.Errf("dial err: %v", t.Run(ops...))
