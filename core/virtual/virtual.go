@@ -9,8 +9,8 @@ import (
 	"github.com/injoyai/base/maps/wait"
 	"github.com/injoyai/base/safe"
 	"github.com/injoyai/conv"
-	"github.com/injoyai/goutil/g"
 	"github.com/injoyai/proxy/core"
+	uuid "github.com/satori/go.uuid"
 	"io"
 	"sync/atomic"
 	"time"
@@ -35,7 +35,7 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 		return v.r.Close()
 	})
 	//默认使用远程的代理配置
-	WithOpenRemote()(v)
+	WithDialRemote()(v)
 	//自定义选项
 	for _, op := range option {
 		op(v)
@@ -68,41 +68,41 @@ func WithRegister(f func(v *Virtual, p Packet) (interface{}, error)) func(v *Vir
 	}
 }
 
-// WithOpened 请求建立连接成功事件
-func WithOpened(f func(p Packet, d *core.Dial, key string)) func(v *Virtual) {
+// WithDialed 请求建立连接成功事件
+func WithDialed(f func(p Packet, d *core.Dial, key string)) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.OnOpened = f
+		v.OnDialed = f
 	}
 }
 
-func WithOpen(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
+func WithDial(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
 	if f == nil {
-		return WithOpenRemote()
+		return WithDialRemote()
 	}
-	return func(v *Virtual) { v.open = f }
+	return func(v *Virtual) { v.OnDial = f }
 }
 
-func WithOpenTCP(address string, timeout ...time.Duration) func(v *Virtual) {
-	return WithOpenCustom(&core.Dial{
+func WithDialTCP(address string, timeout ...time.Duration) func(v *Virtual) {
+	return WithDialCustom(&core.Dial{
 		Type:    "tcp",
 		Address: address,
 		Timeout: conv.DefaultDuration(0, timeout...),
 	})
 }
 
-// WithOpenCustom 使用自定义代理配置进行代理,忽略服务端的配置
-func WithOpenCustom(proxy *core.Dial) func(v *Virtual) {
+// WithDialCustom 使用自定义代理配置进行代理,忽略服务端的配置
+func WithDialCustom(proxy *core.Dial) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.open = func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
+		v.OnDial = func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
 			*d = *proxy
 			return proxy.Dial()
 		}
 	}
 }
 
-// WithOpenRemote 使用服务端的代理配置进行代理
-func WithOpenRemote() func(v *Virtual) {
-	return WithOpen(func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
+// WithDialRemote 使用服务端的代理配置进行代理
+func WithDialRemote() func(v *Virtual) {
+	return WithDial(func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
 		return d.Dial()
 	})
 }
@@ -110,26 +110,35 @@ func WithOpenRemote() func(v *Virtual) {
 // WithBufferSize 设置复制的buffer大小
 func WithBufferSize(size uint) func(v *Virtual) {
 	return func(v *Virtual) {
-		v.CopyBufferSize = size
+		v.copyBufferSize = size
+	}
+}
+
+// WithRegistered 可以设置跳过注册
+func WithRegistered(b ...bool) func(v *Virtual) {
+	return func(v *Virtual) {
+		v.Registered = len(b) > 0 && b[0]
 	}
 }
 
 // Virtual 虚拟设备管理,收到的数据自动转发到对应的IO
 type Virtual struct {
-	k    string
-	f    Frame
-	r    io.ReadWriteCloser
-	IO   *maps.Safe
-	Wait *wait.Entity
-	*safe.Closer
-	running        uint32
-	CopyBufferSize uint //复制的buffer大小
+	k              string             //唯一标识
+	f              Frame              //传输协议
+	r              io.ReadWriteCloser //实际IO,
+	running        uint32             //运行状态,内部字段,不能修改
+	copyBufferSize uint               //复制的buffer大小
 
-	open       func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)
-	OnRegister func(v *Virtual, p Packet) (interface{}, error)
-	OnOpened   func(p Packet, d *core.Dial, key string)
-	OnRequest  func(p []byte) ([]byte, error) //copy的请求数据
-	OnResponse func(p []byte) ([]byte, error) //copy的响应数据
+	*safe.Closer              //安全关闭
+	IO           *maps.Safe   //虚拟IO管理
+	Wait         *wait.Entity //异步等待机制
+	Registered   bool         //是否已经注册,未注册的需要先注册
+
+	OnRegister func(v *Virtual, p Packet) (interface{}, error)                  //注册事件,能校验注册信息
+	OnDial     func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) //新建连接事件,指定连接
+	OnDialed   func(p Packet, d *core.Dial, key string)                         //连接成功事件
+	OnRequest  func(p []byte) ([]byte, error)                                   //copy的请求数据
+	OnResponse func(p []byte) ([]byte, error)                                   //copy的响应数据
 }
 
 func (this *Virtual) Key() string {
@@ -146,19 +155,21 @@ func (this *Virtual) SetOption(op ...Option) {
 	}
 }
 
-// WritePacket 发送数据包到虚拟IO
+// WritePacket 发送数据包到虚拟IO,k(消息ID),t(消息类型),i(消息内容)
 func (this *Virtual) WritePacket(k string, t byte, i interface{}) error {
 	p := this.NewPacket(k, t, i)
 	_, err := this.r.Write(p.Bytes())
 	return err
 }
 
+// NewPacket 新建个协议数据 k(消息ID),t(消息类型),i(消息内容)
 func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
 	p := this.f.NewPacket(k, t, i)
 	core.DefaultLog.Write(p)
 	return p
 }
 
+// Register 进行注册操作,等待注册结果
 func (this *Virtual) Register(data interface{}) (interface{}, error) {
 	if err := this.WritePacket(this.Key(), Request|Register|NeedAck, data); err != nil {
 		return nil, err
@@ -166,9 +177,13 @@ func (this *Virtual) Register(data interface{}) (interface{}, error) {
 	return this.Wait.Wait(this.Key())
 }
 
-func (this *Virtual) Open(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
+// Dial 建立代理连接(另一端想请求的信息)
+func (this *Virtual) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
 	if len(k) == 0 {
-		k = g.UUID()
+		k = uuid.NewV4().String()
+	}
+	if closer == nil {
+		closer = io.NopCloser(nil)
 	}
 	if err := this.WritePacket(k, Open|Request|NeedAck, p); err != nil {
 		return nil, err
@@ -186,9 +201,10 @@ func (this *Virtual) Open(k string, p *core.Dial, closer io.Closer) (io.ReadWrit
 	return this.NewIO(res.Key, closer), nil
 }
 
-func (this *Virtual) OpenAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
+// DialAndSwap 建立代理连接(另一端想请求的信息),然后进行数据交互
+func (this *Virtual) DialAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
-	i, err := this.Open(k, p, c)
+	i, err := this.Dial(k, p, c)
 	if err != nil {
 		return err
 	}
@@ -198,6 +214,7 @@ func (this *Virtual) OpenAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) e
 	return err
 }
 
+// WriteTo 写入到指定虚拟IO
 func (this *Virtual) WriteTo(key string, p []byte) error {
 	i := this.GetIO(key)
 	if i != nil {
@@ -207,6 +224,7 @@ func (this *Virtual) WriteTo(key string, p []byte) error {
 	return errors.New("use closed io")
 }
 
+// GetIO 获取虚拟IO实例
 func (this *Virtual) GetIO(key string) *IO {
 	v := this.IO.MustGet(key)
 	if v != nil {
@@ -215,6 +233,7 @@ func (this *Virtual) GetIO(key string) *IO {
 	return nil
 }
 
+// NewIO 新建个虚拟IO
 func (this *Virtual) NewIO(key string, closer io.Closer) *IO {
 	i := NewIO(key, this.r, NewBuffer(20),
 		func(bs []byte) ([]byte, error) {
@@ -257,17 +276,29 @@ func (this *Virtual) Run() (err error) {
 		//处理代理数据
 		data, err := func() (interface{}, error) {
 
+			if !this.Registered && p.GetType() != Register && p.IsRequest() {
+				//想跳过注册进行数据交互的操作,全部请求数据返回错误
+				return nil, errors.New("未注册")
+			}
+
 			switch p.GetType() {
 
 			case Register:
 
 				if p.IsRequest() {
 					if this.OnRegister != nil {
-						return this.OnRegister(this, p)
+						res, err := this.OnRegister(this, p)
+						if err == nil {
+							//客户端请求注册成功
+							this.Registered = true
+						}
+						return res, err
 					}
 
 				} else {
 					if p.Success() {
+						//注册到服务端成功
+						this.Registered = true
 						this.Wait.Done(p.GetKey(), string(p.GetData()))
 					} else {
 						this.Wait.Done(p.GetKey(), errors.New(string(p.GetData())))
@@ -323,7 +354,7 @@ func (this *Virtual) Run() (err error) {
 			case Open:
 
 				if p.IsRequest() {
-					if this.open == nil {
+					if this.OnDial == nil {
 						return nil, errors.New("open is nil")
 					}
 					m := conv.NewMap(p.GetData())
@@ -337,12 +368,12 @@ func (this *Virtual) Run() (err error) {
 						Timeout: m.GetDuration("timeout"),
 						Param:   gm,
 					}
-					c, key, err := this.open(p, d)
+					c, key, err := this.OnDial(p, d)
 					if err != nil {
 						return nil, err
 					}
-					if this.OnOpened != nil {
-						this.OnOpened(p, d, key)
+					if this.OnDialed != nil {
+						this.OnDialed(p, d, key)
 					}
 					//1. 如果p.Get重复怎么处理,请求的是临时key,一般用uuid
 					//2. 是否需要读写分离,这样错误能对应上,或者被动read,下发read
@@ -361,7 +392,7 @@ func (this *Virtual) Run() (err error) {
 
 						go func() {
 							//_, err := io.Copy(c, i)
-							err = core.CopyBufferWith(i, c, make([]byte, this.CopyBufferSize), func(p []byte) ([]byte, error) {
+							err = core.CopyBufferWith(i, c, make([]byte, this.copyBufferSize), func(p []byte) ([]byte, error) {
 								if this.OnRequest != nil {
 									return this.OnRequest(p)
 								}
@@ -371,7 +402,7 @@ func (this *Virtual) Run() (err error) {
 							i.CloseWithErr(err)
 						}()
 						//_, err := io.Copy(i, c)
-						err = core.CopyBufferWith(c, i, make([]byte, this.CopyBufferSize), func(p []byte) ([]byte, error) {
+						err = core.CopyBufferWith(c, i, make([]byte, this.copyBufferSize), func(p []byte) ([]byte, error) {
 							if this.OnResponse != nil {
 								return this.OnResponse(p)
 							}

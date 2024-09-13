@@ -29,7 +29,7 @@ func main() {
 			},
 		}
 		logs.Err(t.Run(
-			virtual.WithOpenTCP("127.0.0.1:80"),
+			virtual.WithDialTCP("127.0.0.1:80"),
 			virtual.WithKey("ABC"),
 		))
 		<-time.After(time.Second * 5)

@@ -23,7 +23,7 @@ func TestNew(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			New(tun, WithOpenTCP(":10086"))
+			New(tun, WithDialTCP(":10086"))
 		}
 	}()
 
@@ -35,11 +35,11 @@ func TestNew(t *testing.T) {
 		return
 	}
 
-	v := New(tun, WithOpenTCP(":10086"))
+	v := New(tun, WithDialTCP(":10086"))
 
 	for {
 		<-time.After(time.Second)
-		c, err := v.Open(&core.Dial{Address: ":10086"}, nil)
+		c, err := v.Dial("", &core.Dial{Address: ":10086"}, nil)
 		if err != nil {
 			t.Error(err)
 			continue

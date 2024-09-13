@@ -29,6 +29,9 @@ func RunTunnel(port int) error {
 			logs.Debugf("[%s] 新的客户端连接\n", key.Key())
 			return nil
 		},
+		OnClosed: func(key *virtual.Virtual, err error) {
+			logs.Debugf("[%s] 客户端断开连接: %v\n", key.Key(), err)
+		},
 	}
 	return Tunnel.Run()
 }
