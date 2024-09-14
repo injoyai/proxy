@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/injoyai/base/maps"
+	"github.com/injoyai/conv"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 	"io"
@@ -43,6 +44,7 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 		v.SetKey(p.GetKey())
 		//注册事件
 		if this.OnRegister != nil {
+			register.Extend = conv.NewExtend(register.Param)
 			if err := this.OnRegister(tun, v, register); err != nil {
 				return nil, err
 			}
