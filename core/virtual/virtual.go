@@ -23,6 +23,7 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 		k:      fmt.Sprintf("%p", r),
 		f:      DefaultFrame,
 		r:      r,
+		Tag:    maps.NewSafe(),
 		IO:     maps.NewSafe(),
 		Wait:   wait.New(time.Second * 5),
 		Closer: safe.NewCloser(),
@@ -130,6 +131,7 @@ type Virtual struct {
 	copyBufferSize uint               //复制的buffer大小
 
 	*safe.Closer              //安全关闭
+	Tag          *maps.Safe   //记录一些信息
 	IO           *maps.Safe   //虚拟IO管理
 	Wait         *wait.Entity //异步等待机制
 	Registered   bool         //是否已经注册,未注册的需要先注册
