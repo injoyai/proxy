@@ -4,7 +4,7 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
-	"github.com/injoyai/proxy/proxy"
+	"github.com/injoyai/proxy/tunnel"
 	"io"
 )
 
@@ -14,7 +14,7 @@ func init() {
 
 func main() {
 
-	t := proxy.Server{
+	t := tunnel.Server{
 		Listen: &core.Listen{Port: "7000"},
 		OnProxy: func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
 			return &core.Dial{Address: ":80"}, nil, nil

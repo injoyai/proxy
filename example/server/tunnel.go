@@ -6,17 +6,16 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
-	"github.com/injoyai/proxy/proxy"
 	"io"
 )
 
 var (
-	Tunnel *proxy.Server
+	Tunnel *tunnel.Server
 )
 
 func RunTunnel(port int) error {
 	core.DefaultLog.SetLevel(core.LevelInfo)
-	Tunnel = &proxy.Server{
+	Tunnel = &tunnel.Server{
 		Clients: maps.NewSafe(),
 		Listen:  core.NewListenTCP(port),
 		OnRegister: func(r io.ReadWriteCloser, key *virtual.Virtual, reg *virtual.RegisterReq) error {

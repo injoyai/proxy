@@ -10,7 +10,7 @@ import (
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
 	"github.com/injoyai/proxy/forward"
-	. "github.com/injoyai/proxy/proxy"
+	. "github.com/injoyai/proxy/tunnel"
 	"github.com/spf13/cobra"
 	"io"
 	"strings"

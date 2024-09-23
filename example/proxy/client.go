@@ -4,7 +4,7 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/core/virtual"
-	"github.com/injoyai/proxy/proxy"
+	"github.com/injoyai/proxy/tunnel"
 	"time"
 )
 
@@ -14,7 +14,7 @@ func init() {
 
 func main() {
 	for {
-		t := proxy.Client{
+		t := tunnel.Client{
 			Dialer: &core.Dial{
 				Address: "127.0.0.1:10007",
 				Timeout: time.Second * 2,
