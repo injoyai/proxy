@@ -3,8 +3,7 @@ package main
 import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/tunnel"
-	tun "github.com/injoyai/proxy/tunnel"
+	"github.com/injoyai/proxy/tunnel"
 	"time"
 )
 
@@ -14,12 +13,12 @@ func init() {
 
 func main() {
 	for {
-		t := tun.Client{
+		t := tunnel.Client{
 			Dialer: &core.Dial{
 				Address: "127.0.0.1:10007",
 				Timeout: time.Second * 2,
 			},
-			Register: &tunnel.RegisterReq{
+			Register: &core.RegisterReq{
 				Listen: &core.Listen{
 					Type: "tcp",
 					Port: "20001",
@@ -29,8 +28,8 @@ func main() {
 			},
 		}
 		logs.Err(t.Run(
-			tunnel.WithDialTCP("127.0.0.1:80"),
-			tunnel.WithKey("ABC"),
+			core.WithDialTCP("127.0.0.1:80"),
+			core.WithKey("ABC"),
 		))
 		<-time.After(time.Second * 5)
 	}

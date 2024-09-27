@@ -1,4 +1,4 @@
-package tunnel
+package core
 
 import (
 	"bufio"
@@ -10,16 +10,15 @@ import (
 	"github.com/injoyai/base/maps/wait"
 	"github.com/injoyai/base/safe"
 	"github.com/injoyai/conv"
-	"github.com/injoyai/proxy/core"
 	uuid "github.com/satori/go.uuid"
 	"io"
 	"sync/atomic"
 	"time"
 )
 
-type Option func(v *Tunnel)
+type OptionTunnel func(v *Tunnel)
 
-func New(r io.ReadWriteCloser, option ...Option) *Tunnel {
+func NewTunnel(r io.ReadWriteCloser, option ...OptionTunnel) *Tunnel {
 	v := &Tunnel{
 		k:      fmt.Sprintf("%p", r),
 		f:      DefaultFrame,
@@ -71,13 +70,13 @@ func WithRegister(f func(v *Tunnel, p Packet) (interface{}, error)) func(v *Tunn
 }
 
 // WithDialed 请求建立连接成功事件
-func WithDialed(f func(p Packet, d *core.Dial, key string)) func(v *Tunnel) {
+func WithDialed(f func(p Packet, d *Dial, key string)) func(v *Tunnel) {
 	return func(v *Tunnel) {
 		v.OnDialed = f
 	}
 }
 
-func WithDial(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Tunnel) {
+func WithDial(f func(p Packet, d *Dial) (io.ReadWriteCloser, string, error)) func(v *Tunnel) {
 	if f == nil {
 		return WithDialRemote()
 	}
@@ -85,7 +84,7 @@ func WithDial(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)
 }
 
 func WithDialTCP(address string, timeout ...time.Duration) func(v *Tunnel) {
-	return WithDialCustom(&core.Dial{
+	return WithDialCustom(&Dial{
 		Type:    "tcp",
 		Address: address,
 		Timeout: conv.DefaultDuration(0, timeout...),
@@ -93,9 +92,9 @@ func WithDialTCP(address string, timeout ...time.Duration) func(v *Tunnel) {
 }
 
 // WithDialCustom 使用自定义代理配置进行代理,忽略服务端的配置
-func WithDialCustom(proxy *core.Dial) func(v *Tunnel) {
+func WithDialCustom(proxy *Dial) func(v *Tunnel) {
 	return func(v *Tunnel) {
-		v.OnDial = func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
+		v.OnDial = func(p Packet, d *Dial) (io.ReadWriteCloser, string, error) {
 			*d = *proxy
 			return proxy.Dial()
 		}
@@ -104,7 +103,7 @@ func WithDialCustom(proxy *core.Dial) func(v *Tunnel) {
 
 // WithDialRemote 使用服务端的代理配置进行代理
 func WithDialRemote() func(v *Tunnel) {
-	return WithDial(func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
+	return WithDial(func(p Packet, d *Dial) (io.ReadWriteCloser, string, error) {
 		return d.Dial()
 	})
 }
@@ -137,11 +136,11 @@ type Tunnel struct {
 	Wait         *wait.Entity //异步等待机制
 	Registered   bool         //是否已经注册,未注册的需要先注册
 
-	OnRegister func(v *Tunnel, p Packet) (interface{}, error)                   //注册事件,能校验注册信息
-	OnDial     func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) //新建连接事件,指定连接
-	OnDialed   func(p Packet, d *core.Dial, key string)                         //连接成功事件
-	OnRequest  func(p []byte) ([]byte, error)                                   //copy的请求数据
-	OnResponse func(p []byte) ([]byte, error)                                   //copy的响应数据
+	OnRegister func(v *Tunnel, p Packet) (interface{}, error)              //注册事件,能校验注册信息
+	OnDial     func(p Packet, d *Dial) (io.ReadWriteCloser, string, error) //新建连接事件,指定连接
+	OnDialed   func(p Packet, d *Dial, key string)                         //连接成功事件
+	OnRequest  func(p []byte) ([]byte, error)                              //copy的请求数据
+	OnResponse func(p []byte) ([]byte, error)                              //copy的响应数据
 }
 
 func (this *Tunnel) Key() string {
@@ -152,7 +151,7 @@ func (this *Tunnel) SetKey(k string) {
 	this.k = k
 }
 
-func (this *Tunnel) SetOption(op ...Option) {
+func (this *Tunnel) SetOption(op ...OptionTunnel) {
 	for _, f := range op {
 		f(this)
 	}
@@ -168,7 +167,7 @@ func (this *Tunnel) WritePacket(k string, t byte, i interface{}) error {
 // NewPacket 新建个协议数据 k(消息ID),t(消息类型),i(消息内容)
 func (this *Tunnel) NewPacket(k string, t byte, i interface{}) Packet {
 	p := this.f.NewPacket(k, t, i)
-	core.DefaultLog.Write(p)
+	DefaultLog.Write(p)
 	return p
 }
 
@@ -181,7 +180,7 @@ func (this *Tunnel) Register(data interface{}) (interface{}, error) {
 }
 
 // Dial 建立代理连接(另一端想请求的信息)
-func (this *Tunnel) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
+func (this *Tunnel) Dial(k string, p *Dial, closer io.Closer) (io.ReadWriteCloser, error) {
 	if len(k) == 0 {
 		k = uuid.NewV4().String()
 	}
@@ -195,7 +194,7 @@ func (this *Tunnel) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWrite
 	if err != nil {
 		return nil, err
 	}
-	res := new(core.DialRes)
+	res := new(DialRes)
 	if err := json.Unmarshal([]byte(val.(string)), res); err != nil {
 		return nil, err
 	}
@@ -205,7 +204,7 @@ func (this *Tunnel) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWrite
 }
 
 // DialAndSwap 建立代理连接(另一端想请求的信息),然后进行数据交互
-func (this *Tunnel) DialAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
+func (this *Tunnel) DialAndSwap(k string, p *Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
 	i, err := this.Dial(k, p, c)
 	if err != nil {
@@ -276,7 +275,7 @@ func (this *Tunnel) Run() (err error) {
 		if err != nil {
 			return err
 		}
-		core.DefaultLog.Read(p)
+		DefaultLog.Read(p)
 
 		//处理代理数据
 		data, err := func() (interface{}, error) {
@@ -367,7 +366,7 @@ func (this *Tunnel) Run() (err error) {
 					delete(gm, "type")
 					delete(gm, "address")
 					delete(gm, "timeout")
-					d := &core.Dial{
+					d := &Dial{
 						Type:    m.GetString("type", "tcp"),
 						Address: m.GetString("address"),
 						Timeout: m.GetDuration("timeout"),
@@ -390,35 +389,35 @@ func (this *Tunnel) Run() (err error) {
 					i := this.NewVirtual(key, c)
 					go func() {
 						defer func() {
-							core.DefaultLog.Tracef("[%s] 关闭连接,%v\n", key, i.Err())
+							DefaultLog.Tracef("[%s] 关闭连接,%v\n", key, i.Err())
 							c.Close()
 							i.Close()
 						}()
 
 						go func() {
 							//_, err := io.Copy(c, i)
-							err = core.CopyBufferWith(i, c, make([]byte, this.copyBufferSize), func(p []byte) ([]byte, error) {
+							err = CopyBufferWith(i, c, make([]byte, this.copyBufferSize), func(p []byte) ([]byte, error) {
 								if this.OnRequest != nil {
 									return this.OnRequest(p)
 								}
 								return p, nil
 							})
-							core.DefaultLog.PrintErr(err)
+							DefaultLog.PrintErr(err)
 							i.CloseWithErr(err)
 						}()
 						//_, err := io.Copy(i, c)
-						err = core.CopyBufferWith(c, i, make([]byte, this.copyBufferSize), func(p []byte) ([]byte, error) {
+						err = CopyBufferWith(c, i, make([]byte, this.copyBufferSize), func(p []byte) ([]byte, error) {
 							if this.OnResponse != nil {
 								return this.OnResponse(p)
 							}
 							return p, nil
 						})
-						core.DefaultLog.PrintErr(err)
+						DefaultLog.PrintErr(err)
 						i.CloseWithErr(err)
 					}()
 
 					//响应成功,并返回唯一标识
-					return core.DialRes{Key: key, Dial: d}, nil
+					return DialRes{Key: key, Dial: d}, nil
 
 				} else {
 					//响应
@@ -452,10 +451,10 @@ func (this *Tunnel) Run() (err error) {
 		if p.IsRequest() && p.NeedAck() {
 			if err != nil {
 				err = this.WritePacket(p.GetKey(), p.GetType()|Response|Fail, err)
-				core.DefaultLog.PrintErr(err)
+				DefaultLog.PrintErr(err)
 			} else {
 				err = this.WritePacket(p.GetKey(), p.GetType()|Response|Success, data)
-				core.DefaultLog.PrintErr(err)
+				DefaultLog.PrintErr(err)
 			}
 		}
 

@@ -4,16 +4,15 @@ import (
 	"encoding/json"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/tunnel"
 )
 
 type Client struct {
-	Dialer   core.Dialer         //连接配置
-	Register *tunnel.RegisterReq //注册配置
-	virtual  *tunnel.Tunnel      //虚拟设备管理
+	Dialer   core.Dialer       //连接配置
+	Register *core.RegisterReq //注册配置
+	virtual  *core.Tunnel      //虚拟设备管理
 }
 
-func (this *Client) Virtual() *tunnel.Tunnel {
+func (this *Client) Virtual() *core.Tunnel {
 	return this.virtual
 }
 
@@ -24,7 +23,7 @@ func (this *Client) Close() error {
 	return nil
 }
 
-func (this *Client) Run(op ...tunnel.Option) error {
+func (this *Client) Run(op ...core.OptionTunnel) error {
 	err := this.Dial(op...)
 	if err != nil {
 		return err
@@ -33,7 +32,7 @@ func (this *Client) Run(op ...tunnel.Option) error {
 	return this.Virtual().Err()
 }
 
-func (this *Client) Dial(op ...tunnel.Option) error {
+func (this *Client) Dial(op ...core.OptionTunnel) error {
 
 	//连接到服务端
 	c, k, err := this.Dialer.Dial()
@@ -45,9 +44,9 @@ func (this *Client) Dial(op ...tunnel.Option) error {
 	this.Close()
 
 	//虚拟设备管理,默认使用服务的代理配置代理
-	this.virtual = tunnel.New(c)
+	this.virtual = core.NewTunnel(c)
 	this.virtual.SetKey(k)
-	this.virtual.SetOption(tunnel.WithDialed(func(p tunnel.Packet, d *core.Dial, key string) {
+	this.virtual.SetOption(core.WithDialed(func(p core.Packet, d *core.Dial, key string) {
 		if this.Register == nil || this.Register.Listen == nil || this.Register.Listen.Port == "" {
 			core.DefaultLog.Infof("[%s] 代理至 [%s -> %s]\n", p.GetKey(), this.virtual.Key(), d.Address)
 			return

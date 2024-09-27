@@ -5,21 +5,20 @@ import (
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/tunnel"
-	tun "github.com/injoyai/proxy/tunnel"
+	"github.com/injoyai/proxy/tunnel"
 	"io"
 )
 
 var (
-	Tunnel *tun.Server
+	Tunnel *tunnel.Server
 )
 
 func RunTunnel(port int) error {
 	core.DefaultLog.SetLevel(core.LevelInfo)
-	Tunnel = &tun.Server{
+	Tunnel = &tunnel.Server{
 		Clients: maps.NewSafe(),
 		Listen:  core.NewListenTCP(port),
-		OnRegister: func(r io.ReadWriteCloser, key *tunnel.Tunnel, reg *tunnel.RegisterReq) error {
+		OnRegister: func(r io.ReadWriteCloser, key *core.Tunnel, reg *core.RegisterReq) error {
 			switch reg.Param["version"] {
 			default:
 				if reg.Password != "password" {
@@ -29,7 +28,7 @@ func RunTunnel(port int) error {
 			logs.Debugf("[%s] 新的客户端连接\n", key.Key())
 			return nil
 		},
-		OnClosed: func(key *tunnel.Tunnel, err error) {
+		OnClosed: func(key *core.Tunnel, err error) {
 			logs.Debugf("[%s] 客户端断开连接: %v\n", key.Key(), err)
 		},
 	}

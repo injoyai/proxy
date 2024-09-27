@@ -1,4 +1,4 @@
-package tunnel
+package core
 
 import (
 	"github.com/injoyai/base/chans"

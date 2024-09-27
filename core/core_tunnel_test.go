@@ -1,7 +1,6 @@
-package tunnel
+package core
 
 import (
-	"github.com/injoyai/proxy/core"
 	"net"
 	"testing"
 	"time"
@@ -23,7 +22,7 @@ func TestNew(t *testing.T) {
 				t.Error(err)
 				return
 			}
-			New(tun, WithDialTCP(":10086"))
+			NewTunnel(tun, WithDialTCP(":10086"))
 		}
 	}()
 
@@ -35,11 +34,11 @@ func TestNew(t *testing.T) {
 		return
 	}
 
-	v := New(tun, WithDialTCP(":10086"))
+	v := NewTunnel(tun, WithDialTCP(":10086"))
 
 	for {
 		<-time.After(time.Second)
-		c, err := v.Dial("", &core.Dial{Address: ":10086"}, nil)
+		c, err := v.Dial("", &Dial{Address: ":10086"}, nil)
 		if err != nil {
 			t.Error(err)
 			continue
