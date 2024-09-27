@@ -45,7 +45,9 @@ func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
 		return c, c.LocalAddr().String(), nil
 
 	//case "udp":
-	//case "websocker","ws":
+	//case "websocker", "ws":
+	//	return websocket.NewDial(this.Address)(context.Background())
+
 	//case "serial":
 
 	default:
