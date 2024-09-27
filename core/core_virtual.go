@@ -10,9 +10,8 @@ var _ io.ReadWriteCloser = (*Virtual)(nil)
 
 type OptionVirtual func(v *Virtual)
 
-func NewVirtual(key string, w io.Writer, r *chans.IO, op ...OptionVirtual) *Virtual {
+func NewVirtual(w io.Writer, r *chans.IO, op ...OptionVirtual) *Virtual {
 	i := &Virtual{
-		Key:    key,
 		writer: w,
 		reader: r,
 		Closer: safe.NewCloser(),
@@ -31,7 +30,6 @@ func NewVirtual(key string, w io.Writer, r *chans.IO, op ...OptionVirtual) *Virt
 
 // Virtual 虚拟IO,依托于Tunnel
 type Virtual struct {
-	Key          string                            //唯一标识
 	writer       io.Writer                         //虚拟(公共)写入通道
 	reader       *chans.IO                         //虚拟读取通道
 	*safe.Closer                                   //关闭通道
@@ -39,8 +37,8 @@ type Virtual struct {
 	OnClose      func(v *Virtual, err error) error //关闭事件
 }
 
-// ToBuffer 写入数据到buffer,数据会流转到Read函数
-func (this *Virtual) ToBuffer(p []byte) error {
+// ToRead 写入数据到buffer,数据会流转到Read函数
+func (this *Virtual) ToRead(p []byte) error {
 	if this.Closed() {
 		return this.Err()
 	}

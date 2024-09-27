@@ -20,16 +20,16 @@ type OptionTunnel func(v *Tunnel)
 
 func NewTunnel(r io.ReadWriteCloser, option ...OptionTunnel) *Tunnel {
 	v := &Tunnel{
-		k:      fmt.Sprintf("%p", r),
-		f:      DefaultFrame,
-		r:      r,
-		Tag:    maps.NewSafe(),
-		IO:     maps.NewSafe(),
-		Wait:   wait.New(time.Second * 5),
-		Closer: safe.NewCloser(),
+		k:       fmt.Sprintf("%p", r),
+		f:       DefaultFrame,
+		r:       r,
+		Tag:     maps.NewSafe(),
+		Virtual: maps.NewSafe(),
+		Wait:    wait.New(time.Second * 5),
+		Closer:  safe.NewCloser(),
 	}
 	v.Closer.SetCloseFunc(func(err error) error {
-		v.IO.Range(func(key, value interface{}) bool {
+		v.Virtual.Range(func(key, value interface{}) bool {
 			value.(*Virtual).Close()
 			return true
 		})
@@ -132,7 +132,7 @@ type Tunnel struct {
 
 	*safe.Closer              //安全关闭
 	Tag          *maps.Safe   //记录一些信息
-	IO           *maps.Safe   //虚拟IO管理
+	Virtual      *maps.Safe   //虚拟IO管理
 	Wait         *wait.Entity //异步等待机制
 	Registered   bool         //是否已经注册,未注册的需要先注册
 
@@ -179,18 +179,18 @@ func (this *Tunnel) Register(data interface{}) (interface{}, error) {
 	return this.Wait.Wait(this.Key())
 }
 
-// Dial 建立代理连接(另一端想请求的信息)
-func (this *Tunnel) Dial(k string, p *Dial, closer io.Closer) (io.ReadWriteCloser, error) {
-	if len(k) == 0 {
-		k = uuid.NewV4().String()
+// Dial 建立代理连接(另一端想请求的信息)，
+// @key 是唯一标识，用来确定消息响应，为空的话自动生成
+// @dial 代理的链接信息,会赋值为实际的链接信息
+// @closer 就是虚拟IO关闭事件，可以为nil
+func (this *Tunnel) Dial(key string, dial *Dial, closer io.Closer) (io.ReadWriteCloser, error) {
+	if len(key) == 0 {
+		key = uuid.NewV4().String()
 	}
-	if closer == nil {
-		closer = io.NopCloser(nil)
-	}
-	if err := this.WritePacket(k, Open|Request|NeedAck, p); err != nil {
+	if err := this.WritePacket(key, Open|Request|NeedAck, dial); err != nil {
 		return nil, err
 	}
-	val, err := this.Wait.Wait(k)
+	val, err := this.Wait.Wait(key)
 	if err != nil {
 		return nil, err
 	}
@@ -198,15 +198,18 @@ func (this *Tunnel) Dial(k string, p *Dial, closer io.Closer) (io.ReadWriteClose
 	if err := json.Unmarshal([]byte(val.(string)), res); err != nil {
 		return nil, err
 	}
-	*p = *res.Dial
+	*dial = *res.Dial
 	//NewIO已缓存IO
 	return this.NewVirtual(res.Key, closer), nil
 }
 
 // DialAndSwap 建立代理连接(另一端想请求的信息),然后进行数据交互
-func (this *Tunnel) DialAndSwap(k string, p *Dial, c io.ReadWriteCloser) error {
+// @key 是唯一标识，用来确定消息响应，为空的话自动生成
+// @dial 代理的链接信息,会赋值为实际的链接信息
+// @c 就是IO,用来交互数据
+func (this *Tunnel) DialAndSwap(key string, dial *Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
-	i, err := this.Dial(k, p, c)
+	i, err := this.Dial(key, dial, nil)
 	if err != nil {
 		return err
 	}
@@ -216,7 +219,7 @@ func (this *Tunnel) DialAndSwap(k string, p *Dial, c io.ReadWriteCloser) error {
 	return err
 }
 
-// WriteTo 写入到指定虚拟IO
+// WriteTo 写入到指定虚拟IO,不过这个key可不好获取，除非字节通过NewVirtual生成
 func (this *Tunnel) WriteTo(key string, p []byte) error {
 	i := this.GetVirtual(key)
 	if i != nil {
@@ -228,16 +231,17 @@ func (this *Tunnel) WriteTo(key string, p []byte) error {
 
 // GetVirtual 获取虚拟IO实例
 func (this *Tunnel) GetVirtual(key string) *Virtual {
-	v := this.IO.MustGet(key)
+	v := this.Virtual.MustGet(key)
 	if v != nil {
 		return v.(*Virtual)
 	}
 	return nil
 }
 
-// NewVirtual 新建个虚拟IO
+// NewVirtual 新建个虚拟IO,closer就是关闭虚拟IO的事件
+// Writer就是隧道，Reader是新建的，数据是通过Virtual.ToBuffer加入
 func (this *Tunnel) NewVirtual(key string, closer io.Closer) *Virtual {
-	v := NewVirtual(key, this.r, chans.NewIO(20),
+	v := NewVirtual(this.r, chans.NewIO(20),
 		func(v *Virtual) {
 			v.OnWrite = func(bs []byte) ([]byte, error) {
 				return this.NewPacket(key, Write, bs).Bytes(), nil
@@ -246,17 +250,20 @@ func (this *Tunnel) NewVirtual(key string, closer io.Closer) *Virtual {
 				//发送至隧道,通知隧道另一端
 				this.WritePacket(key, Close, err)
 				//从缓存中移除
-				this.IO.Del(key)
+				this.Virtual.Del(key)
 				//关闭客户端
-				closer.Close()
+				if closer != nil {
+					closer.Close()
+				}
 				return nil
 			}
 		},
 	)
-	this.IO.Set(key, v)
+	this.Virtual.Set(key, v)
 	return v
 }
 
+// Run 开始监听数据，并通过设置的协议进行解析
 func (this *Tunnel) Run() (err error) {
 
 	if !atomic.CompareAndSwapUint32(&this.running, 0, 1) {
@@ -339,7 +346,7 @@ func (this *Tunnel) Run() (err error) {
 				if p.IsRequest() {
 					i := this.GetVirtual(p.GetKey())
 					if i != nil {
-						err = i.ToBuffer(p.GetData())
+						err = i.ToRead(p.GetData())
 						return conv.Bytes(uint32(len(p.GetData()))), err
 					} else {
 						//当A还没意识到B已关闭,发送数据的话,会收到远程意外关闭连接的错误
