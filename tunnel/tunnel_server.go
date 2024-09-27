@@ -6,18 +6,18 @@ import (
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/conv"
 	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/virtual"
+	"github.com/injoyai/proxy/core/tunnel"
 	"io"
 	"net"
 )
 
 type Server struct {
-	Clients     *maps.Safe                                                                       //客户端
-	Listen      *core.Listen                                                                     //监听配置
-	OnRegister  func(r io.ReadWriteCloser, key *virtual.Virtual, reg *virtual.RegisterReq) error //注册事件
-	OnProxy     func(r io.ReadWriteCloser) (*core.Dial, []byte, error)                           //代理事件
-	OnConnected func(r io.ReadWriteCloser, key *virtual.Virtual)                                 //
-	OnClosed    func(key *virtual.Virtual, err error)                                            //关闭事件
+	Clients     *maps.Safe                                                                    //客户端
+	Listen      *core.Listen                                                                  //监听配置
+	OnRegister  func(r io.ReadWriteCloser, key *tunnel.Tunnel, reg *tunnel.RegisterReq) error //注册事件
+	OnProxy     func(r io.ReadWriteCloser) (*core.Dial, []byte, error)                        //代理事件
+	OnConnected func(r io.ReadWriteCloser, key *tunnel.Tunnel)                                //
+	OnClosed    func(key *tunnel.Tunnel, err error)                                           //关闭事件
 }
 
 func (this *Server) Run() error {
@@ -32,10 +32,10 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 
 	var listener net.Listener
 
-	v := virtual.New(tun, virtual.WithKey(tun.RemoteAddr().String()))
-	v.SetOption(virtual.WithRegister(func(v *virtual.Virtual, p virtual.Packet) (interface{}, error) {
+	v := tunnel.New(tun, tunnel.WithKey(tun.RemoteAddr().String()))
+	v.SetOption(tunnel.WithRegister(func(v *tunnel.Tunnel, p tunnel.Packet) (interface{}, error) {
 		//解析注册数据
-		register := new(virtual.RegisterReq)
+		register := new(tunnel.RegisterReq)
 		err := json.Unmarshal(p.GetData(), register)
 		if err != nil {
 			return nil, err

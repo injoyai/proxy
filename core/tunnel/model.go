@@ -1,4 +1,4 @@
-package virtual
+package tunnel
 
 import (
 	"encoding/json"

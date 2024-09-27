@@ -8,7 +8,7 @@ import (
 	"github.com/injoyai/goutil/script"
 	"github.com/injoyai/goutil/script/js"
 	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/virtual"
+	"github.com/injoyai/proxy/core/tunnel"
 	"github.com/injoyai/proxy/forward"
 	. "github.com/injoyai/proxy/tunnel"
 	"github.com/spf13/cobra"
@@ -113,19 +113,19 @@ func main() {
 
 					t := Client{
 						Dialer: core.NewDialTCP(args[0], timeout),
-						Register: &virtual.RegisterReq{
+						Register: &tunnel.RegisterReq{
 							Listen:   core.NewListenTCP(port),
 							Username: username,
 							Password: password,
 						},
 					}
-					ops := []virtual.Option{func(v *virtual.Virtual) {
+					ops := []tunnel.Option{func(v *tunnel.Tunnel) {
 						if len(key) > 0 {
 							v.SetKey(key)
 						}
 					}}
 					if len(proxy) > 0 {
-						ops = append(ops, virtual.WithDialTCP(proxy, timeout))
+						ops = append(ops, tunnel.WithDialTCP(proxy, timeout))
 					}
 					for {
 						core.DefaultLog.Errf("dial err: %v", t.Run(ops...))
@@ -171,7 +171,7 @@ func main() {
 							}
 							return core.NewDialTCP(proxy), nil, nil
 						},
-						OnRegister: func(r io.ReadWriteCloser, v *virtual.Virtual, reg *virtual.RegisterReq) error {
+						OnRegister: func(r io.ReadWriteCloser, v *tunnel.Tunnel, reg *tunnel.RegisterReq) error {
 							if listen > 0 {
 								reg.Listen = core.NewListenTCP(listen)
 							}

@@ -1,10 +1,11 @@
-package virtual
+package tunnel
 
 import (
 	"bufio"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/injoyai/base/chans"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/base/maps/wait"
 	"github.com/injoyai/base/safe"
@@ -16,10 +17,10 @@ import (
 	"time"
 )
 
-type Option func(v *Virtual)
+type Option func(v *Tunnel)
 
-func New(r io.ReadWriteCloser, option ...Option) *Virtual {
-	v := &Virtual{
+func New(r io.ReadWriteCloser, option ...Option) *Tunnel {
+	v := &Tunnel{
 		k:      fmt.Sprintf("%p", r),
 		f:      DefaultFrame,
 		r:      r,
@@ -30,7 +31,7 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 	}
 	v.Closer.SetCloseFunc(func(err error) error {
 		v.IO.Range(func(key, value interface{}) bool {
-			value.(*IO).Close()
+			value.(*Virtual).Close()
 			return true
 		})
 		return v.r.Close()
@@ -44,46 +45,46 @@ func New(r io.ReadWriteCloser, option ...Option) *Virtual {
 	return v
 }
 
-func WithKey(k string) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithKey(k string) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.k = k
 	}
 }
 
-func WithFrame(f Frame) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithFrame(f Frame) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.f = f
 	}
 }
 
-func WithWait(timeout time.Duration) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithWait(timeout time.Duration) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.Wait = wait.New(timeout)
 	}
 }
 
 // WithRegister 当客户端进行注册,处理校验客户端的信息
-func WithRegister(f func(v *Virtual, p Packet) (interface{}, error)) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithRegister(f func(v *Tunnel, p Packet) (interface{}, error)) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.OnRegister = f
 	}
 }
 
 // WithDialed 请求建立连接成功事件
-func WithDialed(f func(p Packet, d *core.Dial, key string)) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithDialed(f func(p Packet, d *core.Dial, key string)) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.OnDialed = f
 	}
 }
 
-func WithDial(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Virtual) {
+func WithDial(f func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error)) func(v *Tunnel) {
 	if f == nil {
 		return WithDialRemote()
 	}
-	return func(v *Virtual) { v.OnDial = f }
+	return func(v *Tunnel) { v.OnDial = f }
 }
 
-func WithDialTCP(address string, timeout ...time.Duration) func(v *Virtual) {
+func WithDialTCP(address string, timeout ...time.Duration) func(v *Tunnel) {
 	return WithDialCustom(&core.Dial{
 		Type:    "tcp",
 		Address: address,
@@ -92,8 +93,8 @@ func WithDialTCP(address string, timeout ...time.Duration) func(v *Virtual) {
 }
 
 // WithDialCustom 使用自定义代理配置进行代理,忽略服务端的配置
-func WithDialCustom(proxy *core.Dial) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithDialCustom(proxy *core.Dial) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.OnDial = func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
 			*d = *proxy
 			return proxy.Dial()
@@ -102,28 +103,28 @@ func WithDialCustom(proxy *core.Dial) func(v *Virtual) {
 }
 
 // WithDialRemote 使用服务端的代理配置进行代理
-func WithDialRemote() func(v *Virtual) {
+func WithDialRemote() func(v *Tunnel) {
 	return WithDial(func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) {
 		return d.Dial()
 	})
 }
 
 // WithBufferSize 设置复制的buffer大小
-func WithBufferSize(size uint) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithBufferSize(size uint) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.copyBufferSize = size
 	}
 }
 
 // WithRegistered 可以设置跳过注册
-func WithRegistered(b ...bool) func(v *Virtual) {
-	return func(v *Virtual) {
+func WithRegistered(b ...bool) func(v *Tunnel) {
+	return func(v *Tunnel) {
 		v.Registered = len(b) > 0 && b[0]
 	}
 }
 
-// Virtual 虚拟设备管理,收到的数据自动转发到对应的IO
-type Virtual struct {
+// Tunnel 隧道,虚拟设备管理,收到的数据自动转发到对应的IO
+type Tunnel struct {
 	k              string             //唯一标识
 	f              Frame              //传输协议
 	r              io.ReadWriteCloser //实际IO,
@@ -136,43 +137,43 @@ type Virtual struct {
 	Wait         *wait.Entity //异步等待机制
 	Registered   bool         //是否已经注册,未注册的需要先注册
 
-	OnRegister func(v *Virtual, p Packet) (interface{}, error)                  //注册事件,能校验注册信息
+	OnRegister func(v *Tunnel, p Packet) (interface{}, error)                   //注册事件,能校验注册信息
 	OnDial     func(p Packet, d *core.Dial) (io.ReadWriteCloser, string, error) //新建连接事件,指定连接
 	OnDialed   func(p Packet, d *core.Dial, key string)                         //连接成功事件
 	OnRequest  func(p []byte) ([]byte, error)                                   //copy的请求数据
 	OnResponse func(p []byte) ([]byte, error)                                   //copy的响应数据
 }
 
-func (this *Virtual) Key() string {
+func (this *Tunnel) Key() string {
 	return this.k
 }
 
-func (this *Virtual) SetKey(k string) {
+func (this *Tunnel) SetKey(k string) {
 	this.k = k
 }
 
-func (this *Virtual) SetOption(op ...Option) {
+func (this *Tunnel) SetOption(op ...Option) {
 	for _, f := range op {
 		f(this)
 	}
 }
 
 // WritePacket 发送数据包到虚拟IO,k(消息ID),t(消息类型),i(消息内容)
-func (this *Virtual) WritePacket(k string, t byte, i interface{}) error {
+func (this *Tunnel) WritePacket(k string, t byte, i interface{}) error {
 	p := this.NewPacket(k, t, i)
 	_, err := this.r.Write(p.Bytes())
 	return err
 }
 
 // NewPacket 新建个协议数据 k(消息ID),t(消息类型),i(消息内容)
-func (this *Virtual) NewPacket(k string, t byte, i interface{}) Packet {
+func (this *Tunnel) NewPacket(k string, t byte, i interface{}) Packet {
 	p := this.f.NewPacket(k, t, i)
 	core.DefaultLog.Write(p)
 	return p
 }
 
 // Register 进行注册操作,等待注册结果
-func (this *Virtual) Register(data interface{}) (interface{}, error) {
+func (this *Tunnel) Register(data interface{}) (interface{}, error) {
 	if err := this.WritePacket(this.Key(), Request|Register|NeedAck, data); err != nil {
 		return nil, err
 	}
@@ -180,7 +181,7 @@ func (this *Virtual) Register(data interface{}) (interface{}, error) {
 }
 
 // Dial 建立代理连接(另一端想请求的信息)
-func (this *Virtual) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
+func (this *Tunnel) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWriteCloser, error) {
 	if len(k) == 0 {
 		k = uuid.NewV4().String()
 	}
@@ -200,11 +201,11 @@ func (this *Virtual) Dial(k string, p *core.Dial, closer io.Closer) (io.ReadWrit
 	}
 	*p = *res.Dial
 	//NewIO已缓存IO
-	return this.NewIO(res.Key, closer), nil
+	return this.NewVirtual(res.Key, closer), nil
 }
 
 // DialAndSwap 建立代理连接(另一端想请求的信息),然后进行数据交互
-func (this *Virtual) DialAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
+func (this *Tunnel) DialAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) error {
 	defer c.Close()
 	i, err := this.Dial(k, p, c)
 	if err != nil {
@@ -217,8 +218,8 @@ func (this *Virtual) DialAndSwap(k string, p *core.Dial, c io.ReadWriteCloser) e
 }
 
 // WriteTo 写入到指定虚拟IO
-func (this *Virtual) WriteTo(key string, p []byte) error {
-	i := this.GetIO(key)
+func (this *Tunnel) WriteTo(key string, p []byte) error {
+	i := this.GetVirtual(key)
 	if i != nil {
 		_, err := i.Write(p)
 		return err
@@ -226,36 +227,38 @@ func (this *Virtual) WriteTo(key string, p []byte) error {
 	return errors.New("use closed io")
 }
 
-// GetIO 获取虚拟IO实例
-func (this *Virtual) GetIO(key string) *IO {
+// GetVirtual 获取虚拟IO实例
+func (this *Tunnel) GetVirtual(key string) *Virtual {
 	v := this.IO.MustGet(key)
 	if v != nil {
-		return v.(*IO)
+		return v.(*Virtual)
 	}
 	return nil
 }
 
-// NewIO 新建个虚拟IO
-func (this *Virtual) NewIO(key string, closer io.Closer) *IO {
-	i := NewIO(key, this.r, NewBuffer(20),
-		func(bs []byte) ([]byte, error) {
-			p := this.NewPacket(key, Write, bs)
-			return p.Bytes(), nil
-		}, func(v *IO, err error) error {
-			//发送至隧道,通知隧道另一端
-			this.WritePacket(key, Close, err)
-			//从缓存中移除
-			this.IO.Del(key)
-			//关闭客户端
-			closer.Close()
-			return nil
+// NewVirtual 新建个虚拟IO
+func (this *Tunnel) NewVirtual(key string, closer io.Closer) *Virtual {
+	v := NewVirtual(key, this.r, chans.NewIO(20),
+		func(v *Virtual) {
+			v.OnWrite = func(bs []byte) ([]byte, error) {
+				return this.NewPacket(key, Write, bs).Bytes(), nil
+			}
+			v.OnClose = func(v *Virtual, err error) error {
+				//发送至隧道,通知隧道另一端
+				this.WritePacket(key, Close, err)
+				//从缓存中移除
+				this.IO.Del(key)
+				//关闭客户端
+				closer.Close()
+				return nil
+			}
 		},
 	)
-	this.IO.Set(key, i)
-	return i
+	this.IO.Set(key, v)
+	return v
 }
 
-func (this *Virtual) Run() (err error) {
+func (this *Tunnel) Run() (err error) {
 
 	if !atomic.CompareAndSwapUint32(&this.running, 0, 1) {
 		<-this.Done()
@@ -311,7 +314,7 @@ func (this *Virtual) Run() (err error) {
 			case Read:
 
 				if p.IsRequest() {
-					i := this.GetIO(p.GetKey())
+					i := this.GetVirtual(p.GetKey())
 					if i != nil {
 						bs := make([]byte, conv.Uint32(p.GetData()))
 						n, err := i.Read(bs)
@@ -325,7 +328,7 @@ func (this *Virtual) Run() (err error) {
 					}
 
 				} else {
-					i := this.GetIO(p.GetKey())
+					i := this.GetVirtual(p.GetKey())
 					if i != nil {
 
 					}
@@ -335,7 +338,7 @@ func (this *Virtual) Run() (err error) {
 			case Write:
 
 				if p.IsRequest() {
-					i := this.GetIO(p.GetKey())
+					i := this.GetVirtual(p.GetKey())
 					if i != nil {
 						err = i.ToBuffer(p.GetData())
 						return conv.Bytes(uint32(len(p.GetData()))), err
@@ -384,7 +387,7 @@ func (this *Virtual) Run() (err error) {
 					//  2.3 性能会下降,多了一次IO
 
 					//新建虚拟IO
-					i := this.NewIO(key, c)
+					i := this.NewVirtual(key, c)
 					go func() {
 						defer func() {
 							core.DefaultLog.Tracef("[%s] 关闭连接,%v\n", key, i.Err())
@@ -431,7 +434,7 @@ func (this *Virtual) Run() (err error) {
 
 				//当IO收到关闭信息试时候
 				if p.IsRequest() {
-					i := this.GetIO(p.GetKey())
+					i := this.GetVirtual(p.GetKey())
 					if i != nil {
 						errMsg := string(p.GetData())
 						if len(errMsg) == 0 {

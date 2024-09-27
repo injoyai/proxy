@@ -8,7 +8,7 @@ import (
 	"github.com/injoyai/conv"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/virtual"
+	"github.com/injoyai/proxy/core/tunnel"
 	"io"
 	"net"
 	"net/http"
@@ -118,7 +118,7 @@ func (this *Listen) handler(c net.Conn) error {
 			return err
 		}
 		c1 := bytes.NewReader(bs)
-		return v.(*virtual.Virtual).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*tunnel.Tunnel).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
@@ -137,7 +137,7 @@ func (this *Listen) handler(c net.Conn) error {
 			c.Write([]byte(this.MsgOffline))
 			return nil
 		}
-		return v.(*virtual.Virtual).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*tunnel.Tunnel).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
