@@ -12,6 +12,7 @@ func init() {
 }
 
 func main() {
+	key := "ABC"
 	for {
 		t := tunnel.Client{
 			Dialer: &core.Dial{
@@ -23,13 +24,14 @@ func main() {
 					Type: "tcp",
 					Port: "20001",
 				},
+				Key:      key,
 				Username: "username",
 				Password: "password",
 			},
 		}
 		logs.Err(t.Run(
 			core.WithDialTCP("127.0.0.1:80"),
-			core.WithKey("ABC"),
+			core.WithKey(key),
 		))
 		<-time.After(time.Second * 5)
 	}

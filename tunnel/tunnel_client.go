@@ -9,7 +9,6 @@ import (
 type Client struct {
 	Dialer   core.Dialer       //连接配置
 	Register *core.RegisterReq //注册配置
-	virtual  *core.Tunnel      //虚拟设备管理
 	tunnel   *core.Tunnel      //隧道实例
 }
 

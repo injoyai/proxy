@@ -88,7 +88,7 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 			}
 			defer i.Close()
 
-			core.DefaultLog.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, tun.Key(), proxy.Address)
+			core.DefaultLog.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Port, tun.Key(), proxy.Address)
 
 			return core.Swap(i, struct {
 				io.Reader

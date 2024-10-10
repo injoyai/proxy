@@ -156,13 +156,15 @@ func (this *RegisterReq) String() string {
 
 func (this *RegisterReq) GetVar(key string) *conv.Var {
 	switch key {
+	case "key":
+		return conv.New(this.Key)
 	case "username":
 		return conv.New(this.Username)
 	case "password":
 		return conv.New(this.Password)
 	default:
-		if this.Param == nil {
-			this.Param.GetVar(key)
+		if this.Param != nil {
+			return this.Param.GetVar(key)
 		}
 	}
 	return conv.Nil()

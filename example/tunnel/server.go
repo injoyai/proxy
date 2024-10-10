@@ -19,6 +19,7 @@ func main() {
 			reg.OnProxy = func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
 				return &core.Dial{Address: ":80"}, nil, nil
 			}
+			tun.SetKey(reg.GetString("key"))
 			logs.Debug("注册信息: ", reg)
 			return nil
 		},
