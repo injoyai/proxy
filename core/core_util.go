@@ -6,10 +6,22 @@ import (
 	"net"
 )
 
-func CopyBufferWith(r io.Reader, w io.Writer, buf []byte, f func(p []byte) ([]byte, error)) error {
+func CopyBufferWith(w io.Writer, r io.Reader, buf []byte, f func(p []byte) ([]byte, error)) error {
+	if false {
+		_, err := io.Copy(w, r)
+		return err
+	}
+
 	if len(buf) == 0 {
 		//未声明或者cap为0的情况,重新声明
-		buf = make([]byte, 1024*4)
+		//todo 这里设置太小会有bug,还不清楚原因,会卡在那里
+		//buf = make([]byte, 1024*1)
+		buf = make([]byte, 1024*32)
+	}
+	if f == nil {
+		f = func(p []byte) ([]byte, error) {
+			return p, nil
+		}
 	}
 	for {
 		n, err := r.Read(buf)

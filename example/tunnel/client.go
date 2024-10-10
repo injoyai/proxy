@@ -15,7 +15,7 @@ func main() {
 	for {
 		t := tunnel.Client{
 			Dialer: &core.Dial{
-				Address: "127.0.0.1:10007",
+				Address: "127.0.0.1:7000",
 				Timeout: time.Second * 2,
 			},
 			Register: &core.RegisterReq{

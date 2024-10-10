@@ -6,7 +6,6 @@ import (
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/tunnel"
-	"io"
 )
 
 var (
@@ -18,14 +17,14 @@ func RunTunnel(port int) error {
 	Tunnel = &tunnel.Server{
 		Clients: maps.NewSafe(),
 		Listen:  core.NewListenTCP(port),
-		OnRegister: func(r io.ReadWriteCloser, key *core.Tunnel, reg *core.RegisterReq) error {
+		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReqExtend) error {
 			switch reg.Param["version"] {
 			default:
 				if reg.Password != "password" {
 					return errors.New("账号或者密码错误")
 				}
 			}
-			logs.Debugf("[%s] 新的客户端连接\n", key.Key())
+			logs.Debugf("[%s] 新的客户端连接\n", tun.Key())
 			return nil
 		},
 		OnClosed: func(key *core.Tunnel, err error) {

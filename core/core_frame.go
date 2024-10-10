@@ -31,7 +31,7 @@ type Frame interface {
 
 type Packet interface {
 	Bytes() []byte
-	GetKey() string
+	GetMsgID() string
 	GetData() []byte
 	GetType() byte
 	IsRequest() bool
@@ -48,14 +48,14 @@ Fail     = 0x40 //失败
 NeedAck  = 0x20 //需要响应
 */
 type packet struct {
-	Key  string
-	Data []byte
-	Code byte
+	MsgID string
+	Data  []byte
+	Code  byte
 }
 
 func (this *packet) String() string {
 	return fmt.Sprintf("[%s] 类型: %s, 控制码: %s, 数据: %s",
-		this.Key,
+		this.MsgID,
 		func() string {
 			switch this.GetType() {
 			case Register:
@@ -103,19 +103,19 @@ func (this *packet) GetType() byte {
 
 func (this *packet) Bytes() []byte {
 	lenData := len(this.Data) //额外的字节数
-	lenKey := len(this.Key)
+	lenKey := len(this.MsgID)
 	bs := make([]byte, len(this.Data)+lenKey+8)
 	copy(bs[0:2], []byte{0x89, 0x89})
 	copy(bs[2:6], conv.Bytes(uint32(lenKey+2+lenData)))
-	copy(bs[6:len(this.Key)+6], this.Key)
+	copy(bs[6:len(this.MsgID)+6], this.MsgID)
 	bs[lenKey+6] = '#'
 	bs[lenKey+7] = this.Code
 	copy(bs[lenKey+8:], this.Data)
 	return bs
 }
 
-func (this *packet) GetKey() string {
-	return this.Key
+func (this *packet) GetMsgID() string {
+	return this.MsgID
 }
 
 func (this *packet) GetData() []byte {
@@ -124,16 +124,15 @@ func (this *packet) GetData() []byte {
 
 type frame struct{}
 
-func (this *frame) NewPacket(k string, t byte, d interface{}) Packet {
+func (this *frame) NewPacket(mid string, t byte, d interface{}) Packet {
 	return &packet{
-		Key:  k,
-		Data: conv.Bytes(d),
-		Code: t,
+		MsgID: mid,
+		Data:  conv.Bytes(d),
+		Code:  t,
 	}
 }
 
 func (this *frame) WritePacket(w io.Writer, p Packet) error {
-	//core.DefaultLog.Write(p.Bytes())
 	_, err := w.Write(p.Bytes())
 	return err
 }
@@ -162,9 +161,9 @@ func (this *frame) Decode(bs []byte) (Packet, error) {
 		return nil, fmt.Errorf("数据类型异常: %v", bs)
 	}
 	return &packet{
-		Key:  string(list[0]),
-		Code: list[1][0],
-		Data: list[1][1:],
+		MsgID: string(list[0]),
+		Code:  list[1][0],
+		Data:  list[1][1:],
 	}, nil
 }
 

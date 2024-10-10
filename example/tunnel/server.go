@@ -15,10 +15,10 @@ func main() {
 
 	t := tunnel.Server{
 		Listen: &core.Listen{Port: "7000"},
-		OnProxy: func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
-			return &core.Dial{Address: ":80"}, nil, nil
-		},
-		OnRegister: func(r io.ReadWriteCloser, v *core.Tunnel, reg *core.RegisterReq) error {
+		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReqExtend) error {
+			reg.OnProxy = func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
+				return &core.Dial{Address: ":80"}, nil, nil
+			}
 			logs.Debug("注册信息: ", reg)
 			return nil
 		},

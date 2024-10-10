@@ -10,15 +10,16 @@ type Client struct {
 	Dialer   core.Dialer       //连接配置
 	Register *core.RegisterReq //注册配置
 	virtual  *core.Tunnel      //虚拟设备管理
+	tunnel   *core.Tunnel      //隧道实例
 }
 
-func (this *Client) Virtual() *core.Tunnel {
-	return this.virtual
+func (this *Client) Tunnel() *core.Tunnel {
+	return this.tunnel
 }
 
 func (this *Client) Close() error {
-	if this.virtual != nil {
-		return this.virtual.Close()
+	if this.tunnel != nil {
+		return this.tunnel.Close()
 	}
 	return nil
 }
@@ -28,8 +29,8 @@ func (this *Client) Run(op ...core.OptionTunnel) error {
 	if err != nil {
 		return err
 	}
-	<-this.Virtual().Done()
-	return this.Virtual().Err()
+	<-this.Tunnel().Done()
+	return this.Tunnel().Err()
 }
 
 func (this *Client) Dial(op ...core.OptionTunnel) error {
@@ -44,30 +45,30 @@ func (this *Client) Dial(op ...core.OptionTunnel) error {
 	this.Close()
 
 	//虚拟设备管理,默认使用服务的代理配置代理
-	this.virtual = core.NewTunnel(c)
-	this.virtual.SetKey(k)
-	this.virtual.SetOption(core.WithDialed(func(p core.Packet, d *core.Dial, key string) {
+	this.tunnel = core.NewTunnel(c)
+	this.tunnel.SetKey(k)
+	this.tunnel.SetOption(core.WithDialed(func(d *core.Dial, key string) {
 		if this.Register == nil || this.Register.Listen == nil || this.Register.Listen.Port == "" {
-			core.DefaultLog.Infof("[%s] 代理至 [%s -> %s]\n", p.GetKey(), this.virtual.Key(), d.Address)
+			core.DefaultLog.Infof("[桥接 -> 隧道[%s] -> 请求[%s]\n", this.tunnel.Key(), d.Address)
 			return
 		}
-		core.DefaultLog.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", p.GetKey(), this.Register.Listen.Port, this.virtual.Key(), d.Address)
+		core.DefaultLog.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", this.Register.Listen.Port, this.tunnel.Key(), d.Address)
 	}))
-	this.virtual.SetOption(op...)
-	go this.virtual.Run()
+	this.tunnel.SetOption(op...)
+	go this.tunnel.Run()
 
 	//注册到服务
-	resp, err := this.virtual.Register(this.Register)
+	resp, err := this.tunnel.Register(this.Register)
 	if err != nil {
 		//注册失败则关闭虚拟通道
-		this.virtual.CloseWithErr(err)
+		this.tunnel.CloseWithErr(err)
 		return err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
 		//可能返回空字符,则解析失败
 		//return err
 	}
-	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", this.virtual.Key())
+	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", this.tunnel.Key())
 
 	return nil
 }

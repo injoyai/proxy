@@ -130,15 +130,50 @@ func (this *Listen) GoListen(onConnect func(net.Listener, net.Conn) error) (net.
 }
 
 type RegisterReq struct {
-	Listen      *Listen `json:"listen,omitempty"`   //监听信息
-	Username    string  `json:"username,omitempty"` //用户名
-	Password    string  `json:"password,omitempty"` //密码
-	Param       g.Map   `json:"param,omitempty"`    //其他参数
-	conv.Extend `json:"-"`
+	Listen   *Listen `json:"listen,omitempty"`   //监听信息
+	Key      string  `json:"key"`                //唯一标识
+	Username string  `json:"username,omitempty"` //用户名
+	Password string  `json:"password,omitempty"` //密码
+	Param    g.Map   `json:"param,omitempty"`    //其他参数
+}
+
+func (this *RegisterReq) Extend() *RegisterReqExtend {
+	return &RegisterReqExtend{
+		Listen:   this.Listen,
+		Key:      this.Key,
+		Username: this.Username,
+		Password: this.Password,
+		Param:    this.Param,
+		Extend:   conv.NewExtend(this),
+	}
 }
 
 func (this *RegisterReq) String() string {
 	bs, err := json.Marshal(this)
 	DefaultLog.PrintErr(err)
 	return string(bs)
+}
+
+func (this *RegisterReq) GetVar(key string) *conv.Var {
+	switch key {
+	case "username":
+		return conv.New(this.Username)
+	case "password":
+		return conv.New(this.Password)
+	default:
+		if this.Param == nil {
+			this.Param.GetVar(key)
+		}
+	}
+	return conv.Nil()
+}
+
+type RegisterReqExtend struct {
+	Listen      *Listen `json:"listen,omitempty"`   //监听信息
+	Key         string  `json:"key,omitempty"`      //唯一标识
+	Username    string  `json:"username,omitempty"` //用户名
+	Password    string  `json:"password,omitempty"` //密码
+	Param       g.Map   `json:"param,omitempty"`    //其他参数
+	conv.Extend `json:"-"`
+	OnProxy     func(r io.ReadWriteCloser) (*Dial, []byte, error)
 }

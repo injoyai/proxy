@@ -4,19 +4,25 @@ import (
 	"bytes"
 	"encoding/json"
 	"github.com/injoyai/base/maps"
-	"github.com/injoyai/conv"
 	"github.com/injoyai/proxy/core"
 	"io"
 	"net"
 )
 
 type Server struct {
-	Clients     *maps.Safe                                                                //客户端
-	Listen      *core.Listen                                                              //监听配置
-	OnRegister  func(r io.ReadWriteCloser, key *core.Tunnel, reg *core.RegisterReq) error //注册事件
-	OnProxy     func(r io.ReadWriteCloser) (*core.Dial, []byte, error)                    //代理事件
-	OnConnected func(r io.ReadWriteCloser, key *core.Tunnel)                              //
-	OnClosed    func(key *core.Tunnel, err error)                                         //关闭事件
+	Clients     *maps.Safe                                                //客户端
+	Listen      *core.Listen                                              //监听配置
+	OnRegister  func(tun *core.Tunnel, reg *core.RegisterReqExtend) error //注册事件
+	OnConnected func(conn io.ReadWriteCloser, tun *core.Tunnel)           //连接事件
+	OnClosed    func(key *core.Tunnel, err error)                         //关闭事件
+}
+
+func (this *Server) GetTunnel(key string) *core.Tunnel {
+	x, ok := this.Clients.Get(key)
+	if ok {
+		return x.(*core.Tunnel)
+	}
+	return nil
 }
 
 func (this *Server) Run() error {
@@ -27,29 +33,28 @@ func (this *Server) Run() error {
 }
 
 // Handler 对客户端进行注册验证操作
-func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
+func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error) {
 
 	var listener net.Listener
 
-	v := core.NewTunnel(tun, core.WithKey(tun.RemoteAddr().String()))
-	v.SetOption(core.WithRegister(func(v *core.Tunnel, p core.Packet) (interface{}, error) {
+	tun := core.NewTunnel(tunConn, core.WithKey(tunConn.RemoteAddr().String()))
+	tun.SetOption(core.WithRegister(func(tun *core.Tunnel, p core.Packet) (interface{}, error) {
 		//解析注册数据
 		register := new(core.RegisterReq)
 		err := json.Unmarshal(p.GetData(), register)
 		if err != nil {
 			return nil, err
 		}
+		registerExtend := register.Extend()
 
-		v.SetKey(p.GetKey())
 		//注册事件
 		if this.OnRegister != nil {
-			register.Extend = conv.NewExtend(register.Param)
-			if err := this.OnRegister(tun, v, register); err != nil {
+			if err := this.OnRegister(tun, registerExtend); err != nil {
 				return nil, err
 			}
 		}
 		//如果存在老的连接的话,会被覆盖,变成野连接,能收到数据,不能发数据,还是说关闭老连接?
-		this.Clients.Set(v.Key(), v)
+		this.Clients.Set(tun.Key(), tun)
 
 		//判断客户端是否需要监听端口
 		//客户端可以选择不监听端口,而由服务端进行安排
@@ -67,8 +72,8 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 			prefix := []byte(nil)
 
 			//使用自定义(服务端)代理
-			if this.OnProxy != nil {
-				proxy, prefix, err = this.OnProxy(c)
+			if registerExtend.OnProxy != nil {
+				proxy, prefix, err = registerExtend.OnProxy(c)
 				if err != nil {
 					return err
 				}
@@ -77,13 +82,13 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 				proxy = &core.Dial{}
 			}
 
-			i, err := v.Dial(cKey, proxy, c)
+			i, err := tun.Dial(cKey, proxy, c)
 			if err != nil {
 				return err
 			}
 			defer i.Close()
 
-			core.DefaultLog.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, v.Key(), proxy.Address)
+			core.DefaultLog.Infof("[%s -> :%s] 代理至 [%s -> %s]\n", cKey, register.Listen.Port, tun.Key(), proxy.Address)
 
 			return core.Swap(i, struct {
 				io.Reader
@@ -95,24 +100,24 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 
 		})
 		if err != nil {
-			core.DefaultLog.Errf("[%s] 监听端口[:%s]失败: %s\n", p.GetKey(), register.Listen.Port, err.Error())
+			core.DefaultLog.Errf("[%s] 监听端口[:%s]失败: %s\n", tun.Key(), register.Listen.Port, err.Error())
 			return nil, err
 		}
-		core.DefaultLog.Infof("[%s] 监听端口[:%s]成功...\n", v.Key(), register.Listen.Port)
+		core.DefaultLog.Infof("[%s] 监听端口[:%s]成功...\n", tun.Key(), register.Listen.Port)
 
 		return register.Listen, nil
 	}))
 
 	if this.OnConnected != nil {
-		this.OnConnected(tun, v)
+		this.OnConnected(tunConn, tun)
 	}
 
 	defer func() {
-		this.Clients.Del(v.Key())
+		this.Clients.Del(tun.Key())
+		tunConn.Close()
 		tun.Close()
-		v.Close()
 		if this.OnClosed != nil {
-			this.OnClosed(v, err)
+			this.OnClosed(tun, err)
 		}
 		if listener != nil {
 			listener.Close()
@@ -120,5 +125,5 @@ func (this *Server) Handler(tunListen net.Listener, tun net.Conn) (err error) {
 		}
 	}()
 
-	return v.Run()
+	return tun.Run()
 }
