@@ -397,12 +397,10 @@ func (this *Tunnel) Run() (err error) {
 						}()
 
 						go func() {
-							//_, err := io.Copy(c, i)
 							err = CopyBufferWith(c, i, make([]byte, this.copyBufferSize), this.OnResponse)
 							DefaultLog.PrintErr(err)
 							i.CloseWithErr(err)
 						}()
-						//_, err := io.Copy(i, c)
 						err = CopyBufferWith(i, c, make([]byte, this.copyBufferSize), this.OnResponse)
 						DefaultLog.PrintErr(err)
 						i.CloseWithErr(err)

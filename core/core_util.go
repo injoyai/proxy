@@ -7,14 +7,15 @@ import (
 )
 
 func CopyBufferWith(w io.Writer, r io.Reader, buf []byte, f func(p []byte) ([]byte, error)) error {
-	if false {
-		_, err := io.Copy(w, r)
-		return err
-	}
+	//if false {
+	//	_, err := io.Copy(w, r)
+	//	return err
+	//}
 
 	if len(buf) == 0 {
 		//未声明或者cap为0的情况,重新声明
-		//todo 这里设置太小会有bug,还不清楚原因,会卡在那里
+		//todo 这里设置太小会有bug,还不清楚原因,会卡在那里,
+		//todo 后续排查,目测原因是虚拟IO的bug
 		//buf = make([]byte, 1024*1)
 		buf = make([]byte, 1024*32)
 	}
