@@ -239,7 +239,9 @@ func (this *Tunnel) NewVirtual(key string, closer io.Closer) *Virtual {
 	v := NewVirtual(this.r, chans.NewIO(20),
 		func(v *Virtual) {
 			v.OnWrite = func(bs []byte) ([]byte, error) {
-				return this.f.NewPacket(key, Write, bs).Bytes(), nil
+				p := this.f.NewPacket(key, Write, bs)
+				DefaultLog.Write(p)
+				return p.Bytes(), nil
 			}
 			v.OnClose = func(v *Virtual, err error) error {
 				//发送至隧道,通知隧道另一端

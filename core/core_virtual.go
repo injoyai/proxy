@@ -57,9 +57,9 @@ func (this *Virtual) Write(p []byte) (n int, err error) {
 	if this.Closed() {
 		return 0, this.Err()
 	}
-	//if this.reader.Closed() {
-	//	return 0, io.EOF
-	//}
+	if this.reader.Closed() {
+		return 0, io.EOF
+	}
 	n = len(p) //取原始的长度
 	if this.OnWrite != nil {
 		p, err = this.OnWrite(p)

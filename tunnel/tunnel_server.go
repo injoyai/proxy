@@ -82,15 +82,16 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 				proxy = &core.Dial{}
 			}
 
-			i, err := tun.Dial(cKey, proxy, c)
+			//新建个虚拟IO
+			virtual, err := tun.Dial(cKey, proxy, c)
 			if err != nil {
 				return err
 			}
-			defer i.Close()
+			defer virtual.Close()
 
 			core.DefaultLog.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Port, tun.Key(), proxy.Address)
 
-			return core.Swap(i, struct {
+			return core.Swap(virtual, struct {
 				io.Reader
 				io.WriteCloser
 			}{
