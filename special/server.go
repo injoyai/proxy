@@ -10,12 +10,6 @@ import (
 	"net"
 )
 
-/*
-只有1个隧道连接
-隧道和代理共用一个端口
-
-*/
-
 type Option func(s *Server)
 
 func WithAddress(address string) Option {
@@ -36,6 +30,12 @@ func WithRegister(onRegister func(tun *core.Tunnel, register *core.RegisterReqEx
 	}
 }
 
+func WithTunnel(op ...core.OptionTunnel) Option {
+	return func(s *Server) {
+		s.TunnelOption = append(s.TunnelOption, op...)
+	}
+}
+
 func New(op ...Option) *Server {
 	s := &Server{
 		Port:       7001,
@@ -47,13 +47,20 @@ func New(op ...Option) *Server {
 	return s
 }
 
+/*
+Server
+只有1个隧道连接
+隧道和代理共用一个端口
+根据首次连接的前几个字节来进行判断是否是隧道连接
+*/
 type Server struct {
 	tunnel   *core.Tunnel
 	listener net.Listener
 
-	Port       int                                                            //服务监听的端口
-	Address    string                                                         //客户端转发的地址
-	OnRegister func(tun *core.Tunnel, register *core.RegisterReqExtend) error //注册事件
+	Port         int                                                            //服务监听的端口
+	Address      string                                                         //客户端转发的地址
+	OnRegister   func(tun *core.Tunnel, register *core.RegisterReqExtend) error //注册事件
+	TunnelOption []core.OptionTunnel                                            //隧道选项
 }
 
 func (this *Server) Run() error {
@@ -89,11 +96,19 @@ func (this *Server) handler(c net.Conn) error {
 
 	//说明是隧道连接
 	if n == 2 && prefix[0] == 0x89 && prefix[1] == 0x89 {
-		this.tunnel = core.NewTunnel(struct {
-			io.Reader
-			io.WriteCloser
-		}{io.MultiReader(bytes.NewReader(prefix), c), c})
-		this.tunnel.SetOption(
+		//关闭老的链接
+		if this.tunnel != nil && !this.tunnel.Closed() {
+			this.tunnel.Close()
+		}
+		//建立新的连接实例
+		this.tunnel = core.NewTunnel(
+			struct {
+				io.Reader
+				io.WriteCloser
+			}{
+				io.MultiReader(bytes.NewReader(prefix), c),
+				c,
+			},
 			core.WithKey(c.RemoteAddr().String()),
 			core.WithRegister(func(tun *core.Tunnel, p core.Packet) (interface{}, error) {
 				register := new(core.RegisterReq)
@@ -108,7 +123,9 @@ func (this *Server) handler(c net.Conn) error {
 					}
 				}
 				return nil, nil
-			}))
+			}),
+		)
+		this.tunnel.SetOption(this.TunnelOption...)
 		return this.tunnel.Run()
 	}
 
