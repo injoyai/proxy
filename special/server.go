@@ -94,6 +94,14 @@ func (this *Server) handler(c net.Conn) error {
 		return err
 	}
 
+	conn := struct {
+		io.Reader
+		io.WriteCloser
+	}{
+		io.MultiReader(bytes.NewReader(prefix), c),
+		c,
+	}
+
 	//说明是隧道连接
 	if n == 2 && prefix[0] == 0x89 && prefix[1] == 0x89 {
 		//关闭老的链接
@@ -102,13 +110,7 @@ func (this *Server) handler(c net.Conn) error {
 		}
 		//建立新的连接实例
 		this.tunnel = core.NewTunnel(
-			struct {
-				io.Reader
-				io.WriteCloser
-			}{
-				io.MultiReader(bytes.NewReader(prefix), c),
-				c,
-			},
+			conn,
 			core.WithKey(c.RemoteAddr().String()),
 			core.WithRegister(func(tun *core.Tunnel, p core.Packet) (interface{}, error) {
 				register := new(core.RegisterReq)
@@ -136,6 +138,6 @@ func (this *Server) handler(c net.Conn) error {
 	core.DefaultLog.Infof("监听[:%d] -> 隧道[%s] -> 请求[%s]\n", this.Port, this.tunnel.Key(), this.Address)
 
 	//普通代理连接
-	return this.tunnel.DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(this.Address), c)
+	return this.tunnel.DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(this.Address), conn)
 
 }
