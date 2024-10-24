@@ -18,6 +18,7 @@ func init() {
 			&cfg.Flag{Name: "password", Default: "password", Usage: "允许注册的用户密码"},
 			&cfg.Flag{Name: "address", Default: ":80", Usage: "内网穿透的地址"},
 		),
+		cfg.WithEnv(),
 	)
 }
 
