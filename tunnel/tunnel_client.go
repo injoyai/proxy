@@ -67,7 +67,7 @@ func (this *Client) Dial(op ...core.OptionTunnel) error {
 		//可能返回空字符,则解析失败
 		//return err
 	}
-	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", this.tunnel.Key())
+	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", k) // this.tunnel.Key())
 
 	return nil
 }
