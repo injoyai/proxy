@@ -1,6 +1,7 @@
 package core
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"github.com/injoyai/base/g"
@@ -74,14 +75,16 @@ type Listen struct {
 	Param g.Map  `json:"param,omitempty"` //其他参数
 }
 
-func (this *Listen) Listener() (net.Listener, error) {
+func (this *Listen) Listener(ctx context.Context) (net.Listener, error) {
 	var listener net.Listener
 	var err error
 	switch strings.ToLower(this.Type) {
 	case "tcp":
-		listener, err = net.Listen(this.Type, fmt.Sprintf(":%s", this.Port))
+		var lc net.ListenConfig
+		listener, err = lc.Listen(ctx, this.Type, fmt.Sprintf(":%s", this.Port))
 	default:
-		listener, err = net.Listen("tcp", fmt.Sprintf(":%s", this.Port))
+		var lc net.ListenConfig
+		listener, err = lc.Listen(ctx, "tcp", fmt.Sprintf(":%s", this.Port))
 	}
 	if err != nil {
 		return nil, err
@@ -89,8 +92,8 @@ func (this *Listen) Listener() (net.Listener, error) {
 	return listener, nil
 }
 
-func (this *Listen) Listen(onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
-	listener, err := this.Listener()
+func (this *Listen) Listen(ctx context.Context, onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
+	listener, err := this.Listener(ctx)
 	if err != nil {
 		return err
 	}
@@ -109,8 +112,8 @@ func (this *Listen) Listen(onListen func(net.Listener), onConnect func(net.Liste
 	}
 }
 
-func (this *Listen) GoListen(onConnect func(net.Listener, net.Conn) error) (net.Listener, error) {
-	listener, err := this.Listener()
+func (this *Listen) GoListen(ctx context.Context, onConnect func(net.Listener, net.Conn) error) (net.Listener, error) {
+	listener, err := this.Listener(ctx)
 	if err != nil {
 		return nil, err
 	}

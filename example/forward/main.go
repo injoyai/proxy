@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/forward"
 )
@@ -11,7 +12,7 @@ import (
 func main() {
 	f := forward.Forward{
 		Listen:  core.NewListenTCP(20002),
-		Forward: core.NewDialTCP("192.168.10.187:10001"),
+		Forward: core.NewDialTCP("192.168.10.71:10001"),
 	}
-	f.ListenTCP()
+	f.Run(context.Background())
 }

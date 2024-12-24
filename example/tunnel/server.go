@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/tunnel"
@@ -24,6 +25,6 @@ func main() {
 			return nil
 		},
 	}
-	logs.Err(t.Run())
+	logs.Err(t.Run(context.Background()))
 
 }

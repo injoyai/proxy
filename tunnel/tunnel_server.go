@@ -2,6 +2,7 @@ package tunnel
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/proxy/core"
@@ -25,11 +26,11 @@ func (this *Server) GetTunnel(key string) *core.Tunnel {
 	return nil
 }
 
-func (this *Server) Run() error {
+func (this *Server) Run(ctx context.Context) error {
 	if this.Clients == nil {
 		this.Clients = maps.NewSafe()
 	}
-	return this.Listen.Listen(core.WithListenLog, this.Handler)
+	return this.Listen.Listen(ctx, core.WithListenLog, this.Handler)
 }
 
 // Handler 对客户端进行注册验证操作
@@ -63,7 +64,7 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 		}
 
 		//监听端口
-		listener, err = register.Listen.GoListen(func(listener net.Listener, c net.Conn) error {
+		listener, err = register.Listen.GoListen(context.Background(), func(listener net.Listener, c net.Conn) error {
 			cKey := c.RemoteAddr().String()
 			defer core.DefaultLog.Tracef("[%s] 关闭连接: %v\n", cKey, err)
 			defer c.Close()

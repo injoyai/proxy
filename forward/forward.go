@@ -1,6 +1,7 @@
 package forward
 
 import (
+	"context"
 	"github.com/injoyai/proxy/core"
 	"net"
 )
@@ -10,10 +11,10 @@ type Forward struct {
 	Forward *core.Dial   //转发配置
 }
 
-func (this *Forward) ListenTCP() error {
+func (this *Forward) Run(ctx context.Context) error {
 	core.DefaultLog.Infof("[:%s] 开始监听...\n", this.Listen.Port)
 	defer core.DefaultLog.Infof("[:%s] 关闭监听...\n", this.Listen.Port)
-	return this.Listen.Listen(nil, this.Handler)
+	return this.Listen.Listen(ctx, nil, this.Handler)
 }
 
 func (this *Forward) Handler(l net.Listener, c net.Conn) error {
