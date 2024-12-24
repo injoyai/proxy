@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/forward"
+	"time"
 )
 
 /*
@@ -14,5 +16,10 @@ func main() {
 		Listen:  core.NewListenTCP(20002),
 		Forward: core.NewDialTCP("192.168.10.71:10001"),
 	}
-	f.Run(context.Background())
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		<-time.After(time.Second * 10)
+		cancel()
+	}()
+	fmt.Println(f.Run(ctx))
 }

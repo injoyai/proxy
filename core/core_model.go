@@ -80,16 +80,18 @@ func (this *Listen) Listener(ctx context.Context) (net.Listener, error) {
 	var err error
 	switch strings.ToLower(this.Type) {
 	case "tcp":
-		var lc net.ListenConfig
-		listener, err = lc.Listen(ctx, this.Type, fmt.Sprintf(":%s", this.Port))
+		listener, err = net.Listen(this.Type, fmt.Sprintf(":%s", this.Port))
 	default:
-		var lc net.ListenConfig
-		listener, err = lc.Listen(ctx, "tcp", fmt.Sprintf(":%s", this.Port))
+		listener, err = net.Listen("tcp", fmt.Sprintf(":%s", this.Port))
 	}
-	if err != nil {
-		return nil, err
+	//net.ListenConfig的上下文没有用
+	if err == nil {
+		go func() {
+			<-ctx.Done()
+			listener.Close()
+		}()
 	}
-	return listener, nil
+	return listener, err
 }
 
 func (this *Listen) Listen(ctx context.Context, onListen func(net.Listener), onConnect func(net.Listener, net.Conn) error) error {
