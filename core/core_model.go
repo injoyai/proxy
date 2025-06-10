@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"github.com/injoyai/base/g"
 	"github.com/injoyai/conv"
 	"io"
 	"net"
@@ -30,10 +29,10 @@ func NewDialTCP(address string, timeout ...time.Duration) *Dial {
 }
 
 type Dial struct {
-	Type    string        `json:"type,omitempty"`    //连接类型,TCP,UDP,Websocket,Serial...
-	Address string        `json:"address"`           //连接地址
-	Timeout time.Duration `json:"timeout,omitempty"` //超时时间
-	Param   g.Map         `json:"param,omitempty"`   //其他参数
+	Type    string         `json:"type,omitempty"`    //连接类型,TCP,UDP,Websocket,Serial...
+	Address string         `json:"address"`           //连接地址
+	Timeout time.Duration  `json:"timeout,omitempty"` //超时时间
+	Param   map[string]any `json:"param,omitempty"`   //其他参数
 }
 
 func (this *Dial) Dial() (io.ReadWriteCloser, string, error) {
@@ -70,9 +69,9 @@ func NewListenTCP(port int) *Listen {
 }
 
 type Listen struct {
-	Type  string `json:"type,omitempty"`  //类型,TCP,UDP,Serial等
-	Port  string `json:"port"`            //例如串口是字符的,固使用字符类型
-	Param g.Map  `json:"param,omitempty"` //其他参数
+	Type  string         `json:"type,omitempty"`  //类型,TCP,UDP,Serial等
+	Port  string         `json:"port"`            //例如串口是字符的,固使用字符类型
+	Param map[string]any `json:"param,omitempty"` //其他参数
 }
 
 func (this *Listen) Listener(ctx context.Context) (net.Listener, error) {
@@ -135,11 +134,11 @@ func (this *Listen) GoListen(ctx context.Context, onConnect func(net.Listener, n
 }
 
 type RegisterReq struct {
-	Listen   *Listen `json:"listen,omitempty"`   //监听信息
-	Key      string  `json:"key"`                //唯一标识
-	Username string  `json:"username,omitempty"` //用户名
-	Password string  `json:"password,omitempty"` //密码
-	Param    g.Map   `json:"param,omitempty"`    //其他参数
+	Listen   *Listen        `json:"listen,omitempty"`   //监听信息
+	Key      string         `json:"key"`                //唯一标识
+	Username string         `json:"username,omitempty"` //用户名
+	Password string         `json:"password,omitempty"` //密码
+	Param    map[string]any `json:"param,omitempty"`    //其他参数
 }
 
 func (this *RegisterReq) Extend() *RegisterReqExtend {
@@ -169,18 +168,18 @@ func (this *RegisterReq) GetVar(key string) *conv.Var {
 		return conv.New(this.Password)
 	default:
 		if this.Param != nil {
-			return this.Param.GetVar(key)
+			return conv.New(this.Param[key])
 		}
 	}
 	return conv.Nil()
 }
 
 type RegisterReqExtend struct {
-	Listen      *Listen `json:"listen,omitempty"`   //监听信息
-	Key         string  `json:"key,omitempty"`      //唯一标识
-	Username    string  `json:"username,omitempty"` //用户名
-	Password    string  `json:"password,omitempty"` //密码
-	Param       g.Map   `json:"param,omitempty"`    //其他参数
+	Listen      *Listen        `json:"listen,omitempty"`   //监听信息
+	Key         string         `json:"key,omitempty"`      //唯一标识
+	Username    string         `json:"username,omitempty"` //用户名
+	Password    string         `json:"password,omitempty"` //密码
+	Param       map[string]any `json:"param,omitempty"`    //其他参数
 	conv.Extend `json:"-"`
 	OnProxy     func(r io.ReadWriteCloser) (*Dial, []byte, error)
 }
