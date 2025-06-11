@@ -72,11 +72,11 @@ func (this *packet) String() string {
 		}(),
 		func() string {
 			ls := []string(nil)
-			ls = append(ls, conv.SelectString(this.IsRequest(), "请求", "响应"))
+			ls = append(ls, conv.Select(this.IsRequest(), "请求", "响应"))
 			if this.IsRequest() {
-				ls = append(ls, conv.SelectString(this.NeedAck(), "需要确认", "无需确认"))
+				ls = append(ls, conv.Select(this.NeedAck(), "需要确认", "无需确认"))
 			} else {
-				ls = append(ls, conv.SelectString(this.Success(), "成功", "失败"))
+				ls = append(ls, conv.Select(this.Success(), "成功", "失败"))
 			}
 			return strings.Join(ls, "|")
 		}(),

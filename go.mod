@@ -4,15 +4,15 @@ go 1.20
 
 require (
 	github.com/fatih/color v1.14.1
-	github.com/injoyai/base v1.0.18
-	github.com/injoyai/conv v1.1.10
+	github.com/injoyai/base v1.2.7
+	github.com/injoyai/conv v1.2.5
 	github.com/injoyai/logs v1.0.9
 	github.com/satori/go.uuid v1.2.0
 )
 
 require (
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/kr/text v0.2.0 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
 	github.com/mattn/go-isatty v0.0.17 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect

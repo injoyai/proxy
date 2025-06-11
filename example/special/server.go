@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	"github.com/injoyai/conv/cfg/v2"
+	"github.com/injoyai/conv/cfg"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/special"

@@ -91,7 +91,7 @@ func (this *Listen) handler(c net.Conn) error {
 
 		info := &Info{
 			SN:      sn,
-			Address: conv.SelectString(address == "", this.DefaultAddress, address),
+			Address: conv.Select(address == "", this.DefaultAddress, address),
 		}
 
 		val, ok := this.Select.Get(ipv4)

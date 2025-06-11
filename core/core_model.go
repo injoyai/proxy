@@ -24,7 +24,7 @@ func NewDialTCP(address string, timeout ...time.Duration) *Dial {
 	return &Dial{
 		Type:    "tcp",
 		Address: address,
-		Timeout: conv.DefaultDuration(0, timeout...),
+		Timeout: conv.Default(0, timeout...),
 	}
 }
 
