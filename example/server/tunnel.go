@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+
 	"github.com/injoyai/base/maps"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
@@ -14,7 +15,7 @@ var (
 )
 
 func RunTunnel(port int) error {
-	core.DefaultLog.SetLevel(core.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 	Tunnel = &tunnel.Server{
 		Clients: maps.NewSafe(),
 		Listen:  core.NewListenTCP(port),

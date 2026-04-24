@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	core.DefaultLog.SetLevel(core.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 	cfg.Init(
 		cfg.WithYaml("./config/config.yaml"),
 		cfg.WithFlag(

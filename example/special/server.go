@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+
 	"github.com/injoyai/conv/cfg"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
@@ -9,7 +10,7 @@ import (
 )
 
 func init() {
-	core.DefaultLog.SetLevel(core.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 	cfg.Init(
 		cfg.WithYaml("./config/config.yaml"),
 		cfg.WithFlag(

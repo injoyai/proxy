@@ -2,7 +2,9 @@ package tunnel
 
 import (
 	"encoding/json"
+
 	"github.com/injoyai/conv"
+	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 )
 
@@ -48,10 +50,10 @@ func (this *Client) Dial(op ...core.OptionTunnel) error {
 	this.tunnel.SetKey(k)
 	this.tunnel.SetOption(core.WithDialed(func(d *core.Dial, key string) {
 		if this.Register == nil || this.Register.Listen == nil || this.Register.Listen.Port == "" {
-			core.DefaultLog.Infof("[桥接 -> 隧道[%s] -> 请求[%s]\n", this.tunnel.Key(), d.Address)
+			logs.Infof("[桥接 -> 隧道[%s] -> 请求[%s]\n", this.tunnel.Key(), d.Address)
 			return
 		}
-		core.DefaultLog.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", this.Register.Listen.Port, this.tunnel.Key(), d.Address)
+		logs.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", this.Register.Listen.Port, this.tunnel.Key(), d.Address)
 	}))
 	this.tunnel.SetOption(op...)
 	go this.tunnel.Run()
@@ -67,7 +69,7 @@ func (this *Client) Dial(op ...core.OptionTunnel) error {
 		//可能返回空字符,则解析失败
 		//return err
 	}
-	core.DefaultLog.Infof("[%s] 注册至服务成功...\n", k) // this.tunnel.Key())
+	logs.Infof("[%s] 注册至服务成功...\n", k) // this.tunnel.Key())
 
 	return nil
 }

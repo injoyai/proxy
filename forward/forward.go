@@ -2,8 +2,10 @@ package forward
 
 import (
 	"context"
-	"github.com/injoyai/proxy/core"
 	"net"
+
+	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 )
 
 type Forward struct {
@@ -12,13 +14,13 @@ type Forward struct {
 }
 
 func (this *Forward) Run(ctx context.Context) error {
-	core.DefaultLog.Infof("[:%s] 开始监听...\n", this.Listen.Port)
-	defer core.DefaultLog.Infof("[:%s] 关闭监听...\n", this.Listen.Port)
+	logs.Infof("[:%s] 开始监听...\n", this.Listen.Port)
+	defer logs.Infof("[:%s] 关闭监听...\n", this.Listen.Port)
 	return this.Listen.Listen(ctx, nil, this.Handler)
 }
 
 func (this *Forward) Handler(l net.Listener, c net.Conn) error {
-	core.DefaultLog.Infof("[%s] 转发至 [%s]\n", c.RemoteAddr().String(), this.Forward.Address)
+	logs.Infof("[%s] 转发至 [%s]\n", c.RemoteAddr().String(), this.Forward.Address)
 	defer c.Close()
 
 	newConn, _, err := this.Forward.Dial()
@@ -27,5 +29,5 @@ func (this *Forward) Handler(l net.Listener, c net.Conn) error {
 	}
 	defer newConn.Close()
 
-	return core.Swap(c, newConn)
+	return core.Bridge(c, newConn)
 }

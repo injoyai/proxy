@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"github.com/injoyai/base/maps"
-	"github.com/injoyai/proxy/core"
 	"io"
 	"net"
+
+	"github.com/injoyai/base/maps"
+	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 )
 
 type Server struct {
@@ -66,7 +68,7 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 		//监听端口
 		listener, err = register.Listen.GoListen(context.Background(), func(listener net.Listener, c net.Conn) error {
 			cKey := c.RemoteAddr().String()
-			defer core.DefaultLog.Tracef("[%s] 关闭连接: %v\n", cKey, err)
+			defer logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
 			defer c.Close()
 
 			proxy := &core.Dial{}
@@ -90,9 +92,9 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 			}
 			defer virtual.Close()
 
-			core.DefaultLog.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Port, tun.Key(), proxy.Address)
+			logs.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Port, tun.Key(), proxy.Address)
 
-			return core.Swap(virtual, struct {
+			return core.Bridge(virtual, struct {
 				io.Reader
 				io.WriteCloser
 			}{
@@ -102,10 +104,10 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 
 		})
 		if err != nil {
-			core.DefaultLog.Errf("[%s] 监听端口[:%s]失败: %s\n", tun.Key(), register.Listen.Port, err.Error())
+			logs.Errf("[%s] 监听端口[:%s]失败: %s\n", tun.Key(), register.Listen.Port, err.Error())
 			return nil, err
 		}
-		core.DefaultLog.Infof("[%s] 监听端口[:%s]成功...\n", tun.Key(), register.Listen.Port)
+		logs.Infof("[%s] 监听端口[:%s]成功...\n", tun.Key(), register.Listen.Port)
 
 		return register.Listen, nil
 	}))
@@ -123,7 +125,7 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 		}
 		if listener != nil {
 			listener.Close()
-			core.DefaultLog.Infof("[%s] 关闭监听...\n", listener.Addr().String())
+			logs.Infof("[%s] 关闭监听...\n", listener.Addr().String())
 		}
 	}()
 

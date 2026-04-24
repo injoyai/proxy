@@ -1,106 +1,161 @@
-## 初衷
-###### 项目上遇到的需求是这样的,
-###### 需要对设备(单片机/边缘网关)进行远程访问,远程管理,有很多个设备(单片机/边缘网关)会连接到服务器上面,
-###### 这些设备属于不通的客户/项目,不同的客户端在服务上访问属于自己的设备,固所有的设备监听同一个端口,通过服务端分配设备的桥接工作
-###### 例如HTTP协议,当选择设备001时,所有的请求都带上参数SN=001,就能区分想要访问的设备,从而实现不同用户统一地址访问不同的设备
-###### 例如PLC的远程升级,可以通过服务端桥接到对应的设备,通过设备的转发功能,转发到局域网对应的PLC上,从而实现远程升级
+# Proxy
+
+一个基于 Go 的轻量级隧道代理框架，支持多客户端连接、端口转发、内网穿透等功能。
+
+## 项目简介
+
+本项目旨在解决远程设备管理和访问的需求。多个设备（单片机/边缘网关）可以连接到同一个服务端，通过服务端进行数据转发和桥接，实现：
+
+- 多客户端共享服务端端口
+- 基于注册信息的客户端验证
+- 灵活的数据流向控制
+- 内网穿透和远程代理
+
 ![代理示意](./docs/代理示意2.png)
 
-![代理示意](./docs/代理示意.png)
+## 核心特性
 
-## 需求
-1. 多个客户端可以共用一个服务端的端口,由服务端控制数据流向(例如根据注册信息)
-2. 验证由服务端控制,验证客户端
-3. 通过服务端来控制流向,客户端可选更改流向,例如将带参数sn=001的请求转发到001客户端
+- **多客户端支持**：多个客户端可共用服务端端口，由服务端控制数据流向
+- **客户端验证**：服务端可验证客户端身份
+- **灵活转发**：支持端口转发、隧道代理、内网穿透
+- **协议自定义**：支持自定义帧协议和数据转换
 
-## 如何使用
+## 项目结构
 
-### 1. 命令方式
-1. 端口转发,例`80`端口转到`8080` 
-    ```shell
-    proxy.exe forward "80->:8080"
-    ```
+```
+proxy/
+├── core/          # 核心包
+│   ├── frame.go   # 帧协议定义
+│   ├── io.go      # 虚拟IO
+│   ├── model.go   # 数据模型
+│   ├── tunnel.go  # 隧道核心
+│   ├── option.go  # 隧道选项
+│   ├── listen.go  # 网络监听
+│   └── util.go    # 工具函数
+├── tunnel/        # 隧道客户端和服务端
+├── forward/       # 端口转发
+├── special/       # 特殊模式（隧道和代理共用端口）
+└── example/       # 示例代码
+```
 
-2. 端口转发,例`80`端口转到局域网的`8080`端口 
-    ```shell
-    proxy.exe forward "80->:192.168.1.3:8080"
-    ```
+## 快速开始
 
-3. 代理服务端,例监听`7000`端口用于客户端连接,监听`80`端口转发至客户端的`8080`端口 
-    ``` shell
-    proxy.exe server -p=7000 "80->:8080"
-    ```
+### 端口转发
 
-4. 代理客户端,例连接到`8.8.8.8:7000`上,请求监听服务的`80`端口,转发到本地的`8080`端口,请求验证的账号密码是`test`
-    ```shell
-    proxy.exe client 8.8.8.8:7000 "80->:8080" --username=test --password=test
-    ```
-
-### 2. 代码方式
-#### 2.1 端口转发
+将本地端口转发到目标地址：
 
 ```go
 package main
 
 import (
-	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/forward"
+    "context"
+    "github.com/injoyai/proxy/core"
+    "github.com/injoyai/proxy/forward"
 )
 
-//将本地端口20002的TCP数据转发至局域网192.168.10.187:10001上
 func main() {
-	f := forward.Forward{
-		Listen:  core.NewListenTCP("20002"),
-		Forward: core.NewDialTCP("192.168.10.187:10001"),
-	}
-	f.ListenTCP()
+    f := forward.Forward{
+        Listen:  core.NewListenTCP(20002),
+        Forward: core.NewDialTCP("192.168.10.187:10001"),
+    }
+    f.Run(context.Background())
 }
-
 ```
 
-#### 2.2 远程代理
+### 隧道代理
+
+#### 服务端
 
 ```go
 package main
 
 import (
-	"fmt"
-	"github.com/injoyai/proxy/core"
-	"github.com/injoyai/proxy/core/virtual"
-	"github.com/injoyai/proxy/proxy"
-	"io"
+    "context"
+    "github.com/injoyai/proxy/core"
+    "github.com/injoyai/proxy/tunnel"
+    "io"
 )
 
-// 客户端先通过7000端口连接到服务端,然后进行注册监听20001端口
-// 服务端监20001端口数据转发至客户端的80端口
-// 客户端可以在不同主机上运行,进而实现远程代理功能
 func main() {
-	s := proxy.Server{
-		Listen: core.NewListenTCP("7000"),
-		OnProxy: func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
-			//监听服务的数据,转发至客户端的80端口
-			return core.NewDialTCP(":80"), nil, nil
-		},
-		OnRegister: func(r io.ReadWriteCloser, v *virtual.Virtual, reg *virtual.RegisterReq) error {
-			//客户端与服务端建立连接,并上报注册信息,验证失败则返回错误
-			fmt.Println("注册信息: ", r)
-			return nil
-		},
-	}
-	go s.Run()
-
-	c := proxy.Client{
-		Dial: core.NewDialTCP("127.0.0.1:7000"),
-		Register: &virtual.RegisterReq{
-			//向服务端请求监听20001端口
-			Listen:   core.NewListenTCP("20001"),
-			//一些注册信息
-			Username: "username",
-			Password: "password",
-		},
-	}
-	c.DialTCP()
+    s := tunnel.Server{
+        Listen: core.NewListenTCP(7000),
+        OnRegister: func(tun *core.Tunnel, reg *core.RegisterReqExtend) error {
+            // 验证客户端注册信息
+            return nil
+        },
+    }
+    s.Run(context.Background())
 }
-
 ```
 
+#### 客户端
+
+```go
+package main
+
+import (
+    "github.com/injoyai/proxy/core"
+    "github.com/injoyai/proxy/tunnel"
+    "time"
+)
+
+func main() {
+    c := tunnel.Client{
+        Dialer: &core.Dial{
+            Address: "127.0.0.1:7000",
+            Timeout: time.Second * 2,
+        },
+        Register: &core.RegisterReq{
+            Listen:   core.NewListenTCP(20001),
+            Username: "username",
+            Password: "password",
+        },
+    }
+    c.Run(core.WithDialTCP(":80"))
+}
+```
+
+### 特殊模式
+
+隧道和代理共用同一个端口，根据帧头自动识别：
+
+```go
+package main
+
+import (
+    "fmt"
+    "github.com/injoyai/proxy/core"
+    "github.com/injoyai/proxy/special"
+)
+
+func main() {
+    s := special.New(
+        special.WithPort(7001),
+        special.WithAddress(":80"),
+        special.WithRegister(func(tun *core.Tunnel, reg *core.RegisterReqExtend) error {
+            fmt.Printf("[%s] 注册成功\n", tun.Key())
+            return nil
+        }),
+    )
+    s.Run()
+}
+```
+
+## 协议说明
+
+默认帧协议格式：
+
+```
+| 0x89 | 0x89 | 长度(4字节) | MsgID | # | Code | Data |
+```
+
+- `0x8989`：帧头标识
+- 长度：MsgID + Code + Data 的总长度
+- MsgID：消息唯一标识
+- `#`：分隔符
+- Code：控制码（消息类型+请求/响应标识）
+- Data：数据内容
+
+## License
+
+MIT

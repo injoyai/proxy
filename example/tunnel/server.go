@@ -9,7 +9,7 @@ import (
 )
 
 func init() {
-	core.DefaultLog.SetLevel(core.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 }
 
 func main() {

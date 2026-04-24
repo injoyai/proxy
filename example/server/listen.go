@@ -4,15 +4,16 @@ import (
 	"bufio"
 	"bytes"
 	"fmt"
-	"github.com/injoyai/base/maps"
-	"github.com/injoyai/conv"
-	"github.com/injoyai/logs"
-	"github.com/injoyai/proxy/core"
 	"io"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"strings"
+
+	"github.com/injoyai/base/maps"
+	"github.com/injoyai/conv"
+	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 )
 
 type Listen struct {
@@ -117,7 +118,7 @@ func (this *Listen) handler(c net.Conn) error {
 			return err
 		}
 		c1 := bytes.NewReader(bs)
-		return v.(*core.Tunnel).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*core.Tunnel).DialBridge(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
@@ -136,7 +137,7 @@ func (this *Listen) handler(c net.Conn) error {
 			c.Write([]byte(this.MsgOffline))
 			return nil
 		}
-		return v.(*core.Tunnel).DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return v.(*core.Tunnel).DialBridge(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer

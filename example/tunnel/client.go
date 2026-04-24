@@ -1,14 +1,15 @@
 package main
 
 import (
+	"time"
+
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/tunnel"
-	"time"
 )
 
 func init() {
-	core.DefaultLog.SetLevel(core.LevelInfo)
+	logs.SetLevel(logs.LevelInfo)
 }
 
 func main() {

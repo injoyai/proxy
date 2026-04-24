@@ -4,10 +4,12 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"github.com/injoyai/logs"
-	"github.com/injoyai/proxy/core"
 	"io"
 	"net"
+	"sync"
+
+	"github.com/injoyai/logs"
+	"github.com/injoyai/proxy/core"
 )
 
 type Option func(s *Server)
@@ -55,6 +57,7 @@ Server
 */
 type Server struct {
 	tunnel   *core.Tunnel
+	tunnelMu sync.RWMutex
 	listener net.Listener
 
 	Port         int                                                            //服务监听的端口
@@ -68,7 +71,7 @@ func (this *Server) Run() error {
 	if err != nil {
 		return err
 	}
-	core.DefaultLog.Infof("监听端口[:%d]成功...\n", this.Port)
+	logs.Infof("监听端口[:%d]成功...\n", this.Port)
 
 	this.listener = listener
 	for {
@@ -104,11 +107,10 @@ func (this *Server) handler(c net.Conn) error {
 
 	//说明是隧道连接
 	if n == 2 && prefix[0] == 0x89 && prefix[1] == 0x89 {
-		//关闭老的链接
+		this.tunnelMu.Lock()
 		if this.tunnel != nil && !this.tunnel.Closed() {
 			this.tunnel.Close()
 		}
-		//建立新的连接实例
 		this.tunnel = core.NewTunnel(
 			conn,
 			core.WithKey(c.RemoteAddr().String()),
@@ -118,7 +120,6 @@ func (this *Server) handler(c net.Conn) error {
 				if err != nil {
 					return nil, err
 				}
-				//注册事件
 				if this.OnRegister != nil {
 					if err := this.OnRegister(tun, register.Extend()); err != nil {
 						return nil, err
@@ -128,16 +129,21 @@ func (this *Server) handler(c net.Conn) error {
 			}),
 		)
 		this.tunnel.SetOption(this.TunnelOption...)
+		this.tunnelMu.Unlock()
 		return this.tunnel.Run()
 	}
 
-	if this.tunnel == nil || this.tunnel.Closed() {
+	this.tunnelMu.RLock()
+	tunnelExists := this.tunnel != nil && !this.tunnel.Closed()
+	this.tunnelMu.RUnlock()
+
+	if !tunnelExists {
 		return nil
 	}
 
-	core.DefaultLog.Infof("监听[:%d] -> 隧道[%s] -> 请求[%s]\n", this.Port, this.tunnel.Key(), this.Address)
+	logs.Infof("监听[:%d] -> 隧道[%s] -> 请求[%s]\n", this.Port, this.tunnel.Key(), this.Address)
 
 	//普通代理连接
-	return this.tunnel.DialAndSwap(c.RemoteAddr().String(), core.NewDialTCP(this.Address), conn)
+	return this.tunnel.DialBridge(c.RemoteAddr().String(), core.NewDialTCP(this.Address), conn)
 
 }
