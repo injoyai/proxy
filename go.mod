@@ -3,14 +3,14 @@ module github.com/injoyai/proxy
 go 1.25.0
 
 require (
-	github.com/fatih/color v1.18.0
+	github.com/google/uuid v1.6.0
 	github.com/injoyai/base v1.2.23
 	github.com/injoyai/conv v1.2.6
 	github.com/injoyai/logs v1.0.12
-	github.com/satori/go.uuid v1.2.0
 )
 
 require (
+	github.com/fatih/color v1.18.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/mattn/go-colorable v0.1.13 // indirect
