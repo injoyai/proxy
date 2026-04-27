@@ -13,21 +13,22 @@ type Forward struct {
 	Forward *core.Dial   //转发配置
 }
 
-func (this *Forward) Run(ctx context.Context) error {
-	logs.Infof("[:%s] 开始监听...\n", this.Listen.Port)
-	defer logs.Infof("[:%s] 关闭监听...\n", this.Listen.Port)
-	return this.Listen.Listen(ctx, nil, this.Handler)
+func (this *Forward) Run(ctx ...context.Context) error {
+	this.Listen.OnConnected(this.Handler)
+	return this.Listen.ListenAndRun(ctx...)
 }
 
-func (this *Forward) Handler(l net.Listener, c net.Conn) error {
+func (this *Forward) Handler(l net.Listener, c net.Conn) {
 	logs.Infof("[%s] 转发至 [%s]\n", c.RemoteAddr().String(), this.Forward.Address)
 	defer c.Close()
 
 	newConn, _, err := this.Forward.Dial()
 	if err != nil {
-		return err
+		logs.Err(err)
+		return
 	}
 	defer newConn.Close()
 
-	return core.Bridge(c, newConn)
+	err = core.Bridge(c, newConn)
+	_ = err
 }

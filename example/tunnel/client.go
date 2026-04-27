@@ -22,8 +22,8 @@ func main() {
 			},
 			Register: &core.RegisterReq{
 				Listen: &core.Listen{
-					Type: "tcp",
-					Port: "20001",
+					Type:    "tcp",
+					Address: ":20001",
 				},
 				Key:      key,
 				Username: "username",
@@ -31,7 +31,7 @@ func main() {
 			},
 		}
 		logs.Err(t.Run(
-			core.WithDialTCP("127.0.0.1:80"),
+			core.WithDialTCP("baidu.com:80"),
 			core.WithKey(key),
 		))
 		<-time.After(time.Second * 5)

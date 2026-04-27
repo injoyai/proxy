@@ -1,9 +1,25 @@
 package core
 
 import (
+	"cmp"
+	"fmt"
 	"io"
 	"net"
+
+	"github.com/injoyai/conv"
 )
+
+const (
+	TCP       = "tcp"
+	UDP       = "udp"
+	Serial    = "serial"
+	Websocket = "websocket"
+)
+
+func init() {
+	//logs.SetFormatterWithTime()
+	//logs.SetLevel(logs.LevelInfo)
+}
 
 func Bridge(c1, c2 io.ReadWriteCloser) error {
 	defer c1.Close()
@@ -26,4 +42,13 @@ func DefaultDial(d *Dial) (io.ReadWriteCloser, string, error) {
 		return nil, "", err
 	}
 	return c, c.LocalAddr().String(), nil
+}
+
+func Address[T cmp.Ordered](addr T) string {
+	switch t := any(addr).(type) {
+	case string:
+		return t
+	default:
+		return fmt.Sprintf(":%d", conv.Int(t))
+	}
 }

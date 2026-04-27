@@ -1,7 +1,6 @@
 package main
 
 import (
-	"context"
 	"errors"
 
 	"github.com/injoyai/base/maps"
@@ -33,7 +32,7 @@ func RunTunnel(port int) error {
 			logs.Debugf("[%s] 客户端断开连接: %v\n", key.Key(), err)
 		},
 	}
-	return Tunnel.Run(context.Background())
+	return Tunnel.Run()
 }
 
 type Info struct {

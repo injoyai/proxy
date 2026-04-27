@@ -21,7 +21,7 @@ import (
 // NewTunnel 创建一个新的隧道实例
 // r 是底层的物理连接,option 是可选的配置函数
 // 隧道是虚拟通道的管理器,支持多条虚拟IO复用同一条物理连接
-func NewTunnel(r io.ReadWriteCloser, option ...OptionTunnel) *Tunnel {
+func NewTunnel(r io.ReadWriteCloser, option ...TunnelOption) *Tunnel {
 	v := &Tunnel{
 		k:      fmt.Sprintf("%p", r),
 		f:      DefaultFrame,
@@ -65,7 +65,7 @@ type Tunnel struct {
 	registered atomic.Bool        // registered 是否已完成注册
 
 	dial       func(d *Dial) (io.ReadWriteCloser, string, error) // dial 拨号函数
-	onRegister func(v *Tunnel, p Packet) (interface{}, error)    // onRegister 注册回调
+	onRegister func(v *Tunnel, data []byte) (interface{}, error) // onRegister 注册回调
 	onDialed   func(d *Dial, key string)                         // onDialed 连接成功回调
 }
 
@@ -80,7 +80,7 @@ func (this *Tunnel) SetKey(k string) {
 }
 
 // SetOption 设置隧道选项
-func (this *Tunnel) SetOption(op ...OptionTunnel) {
+func (this *Tunnel) SetOption(op ...TunnelOption) {
 	for _, f := range op {
 		f(this)
 	}
@@ -88,9 +88,9 @@ func (this *Tunnel) SetOption(op ...OptionTunnel) {
 
 // WritePacket 发送一个数据包到对端
 // msgID 为消息唯一标识,t 为消息类型,i 为消息内容
-func (this *Tunnel) WritePacket(msgID string, t byte, i any) error {
-	p := this.f.NewPacket(msgID, t, i)
-	_, err := this.r.Write(p.Bytes())
+func (this *Tunnel) WritePacket(msgID string, _type Type, tags Tags, i any) error {
+	bs := this.f.NewPacket(msgID, _type, tags, i)
+	_, err := this.r.Write(bs)
 	return err
 }
 
@@ -98,10 +98,15 @@ func (this *Tunnel) WritePacket(msgID string, t byte, i any) error {
 // data 为注册信息,通常为 RegisterReq 结构体
 // 返回对端的响应数据
 func (this *Tunnel) Register(data any) (any, error) {
-	if err := this.WritePacket(this.Key(), Request|Register|NeedAck, data); err != nil {
+	if err := this.WritePacket(this.Key(), Register, Tags{Request, Success, NeedAck}, data); err != nil {
 		return nil, err
 	}
-	return this.wait.Wait(this.Key())
+	resp, err := this.wait.Wait(this.Key())
+	if err != nil {
+		return nil, err
+	}
+	this.registered.Store(true)
+	return resp, nil
 }
 
 // Dial 向对端发起建立连接的请求
@@ -111,7 +116,7 @@ func (this *Tunnel) Dial(msgID string, dial *Dial, closer io.Closer) (io.ReadWri
 	if len(msgID) == 0 {
 		msgID = uuid.New().String()
 	}
-	if err := this.WritePacket(msgID, Open|Request|NeedAck, dial); err != nil {
+	if err := this.WritePacket(msgID, Open, Tags{Request, Success, NeedAck}, dial); err != nil {
 		return nil, err
 	}
 	val, err := this.wait.Wait(msgID)
@@ -149,12 +154,11 @@ func (this *Tunnel) GetIO(key string) *IO {
 func (this *Tunnel) CreateIO(key string, closer io.Closer) *IO {
 	v := NewIO(this.r, func(v *IO) {
 		v.OnWrite = func(bs []byte) ([]byte, error) {
-			p := this.f.NewPacket(key, Write, bs)
-			logs.Debug(p)
-			return p.Bytes(), nil
+			p := this.f.NewPacket(key, Write, Tags{}, bs)
+			return p, nil
 		}
 		v.OnClose = func(v *IO, err error) error {
-			this.WritePacket(key, Close, err)
+			this.WritePacket(key, Close, Tags{}, err)
 			this.ioMu.Lock()
 			delete(this.ioMap, key)
 			this.ioMu.Unlock()
@@ -187,31 +191,34 @@ func (this *Tunnel) Run() (err error) {
 	buf := bufio.NewReader(this.r)
 
 	for {
-		p, err := this.f.ReadPacket(buf)
+		msgID, _type, tags, data, err := this.f.ReadPacket(buf)
 		if err != nil {
 			return err
 		}
 
 		// 处理响应数据
-		if !p.IsRequest() {
-			if p.Success() {
-				this.wait.Done(p.GetMsgID(), string(p.GetData()))
+		if !tags.IsRequest() {
+			if tags.Success() {
+				this.wait.Done(msgID, string(data))
 			} else {
-				this.wait.Done(p.GetMsgID(), errors.New(string(p.GetData())))
+				this.wait.Done(msgID, errors.New(string(data)))
 			}
 			continue
 		}
 
 		// 处理隧道过来的请求数据
-		data, err := this.dealMessage(p)
+		resp, err := this.dealMessage(msgID, _type, data)
+		if err != nil {
+			return err
+		}
 
 		// 判断是否需要响应
-		if p.NeedAck() {
+		if tags.NeedAck() {
 			if err != nil {
-				err = this.WritePacket(p.GetMsgID(), p.GetType()|Response|Fail, err)
+				err = this.WritePacket(msgID, _type, Tags{Response, Fail}, err)
 				logs.PrintErr(err)
 			} else {
-				err = this.WritePacket(p.GetMsgID(), p.GetType()|Response|Success, data)
+				err = this.WritePacket(msgID, _type, Tags{Response, Success}, resp)
 				logs.PrintErr(err)
 			}
 		}
@@ -219,17 +226,17 @@ func (this *Tunnel) Run() (err error) {
 }
 
 // dealMessage 处理请求类型的消息
-func (this *Tunnel) dealMessage(p Packet) (any, error) {
+func (this *Tunnel) dealMessage(msgID string, _type Type, data []byte) (any, error) {
 	// 对于没注册的非注册消息,返回错误
-	if !this.registered.Load() && p.GetType() != Register {
+	if !this.registered.Load() && _type != Register {
 		return nil, ErrNotRegister
 	}
 
-	switch p.GetType() {
+	switch _type {
 
 	case Register:
 		if this.onRegister != nil {
-			res, err := this.onRegister(this, p)
+			res, err := this.onRegister(this, data)
 			if err == nil {
 				this.registered.Store(true)
 			}
@@ -237,9 +244,9 @@ func (this *Tunnel) dealMessage(p Packet) (any, error) {
 		}
 
 	case Read:
-		i := this.GetIO(p.GetMsgID())
+		i := this.GetIO(msgID)
 		if i != nil {
-			bs := make([]byte, conv.Uint32(p.GetData()))
+			bs := make([]byte, conv.Uint32(data))
 			n, err := i.Read(bs)
 			if err != nil {
 				return nil, err
@@ -249,17 +256,17 @@ func (this *Tunnel) dealMessage(p Packet) (any, error) {
 		return nil, ErrRemoteClose
 
 	case Write:
-		i := this.GetIO(p.GetMsgID())
+		i := this.GetIO(msgID)
 		if i != nil {
-			err := i.ToRead(p.GetData())
-			return conv.Bytes(uint32(len(p.GetData()))), err
+			err := i.ToRead(data)
+			return conv.Bytes(uint32(len(data))), err
 		}
 		return nil, ErrRemoteClose
 
 	case Close:
-		i := this.GetIO(p.GetMsgID())
+		i := this.GetIO(msgID)
 		if i != nil {
-			errMsg := string(p.GetData())
+			errMsg := string(data)
 			if len(errMsg) == 0 {
 				errMsg = io.EOF.Error()
 			}
@@ -267,7 +274,7 @@ func (this *Tunnel) dealMessage(p Packet) (any, error) {
 		}
 
 	case Open:
-		return this.dealOpen(p)
+		return this.dealOpen(data)
 
 	}
 
@@ -275,11 +282,11 @@ func (this *Tunnel) dealMessage(p Packet) (any, error) {
 }
 
 // dealOpen 处理 Open 类型的请求,建立到目标地址的连接
-func (this *Tunnel) dealOpen(p Packet) (any, error) {
+func (this *Tunnel) dealOpen(data []byte) (any, error) {
 	if this.dial == nil {
 		return nil, ErrDialInvalid
 	}
-	m := conv.NewMap(p.GetData())
+	m := conv.NewMap(data)
 	gm := m.GMap()
 	delete(gm, "type")
 	delete(gm, "address")

@@ -32,7 +32,7 @@ func WithRegister(onRegister func(tun *core.Tunnel, register *core.RegisterReqEx
 	}
 }
 
-func WithTunnel(op ...core.OptionTunnel) Option {
+func WithTunnel(op ...core.TunnelOption) Option {
 	return func(s *Server) {
 		s.TunnelOption = append(s.TunnelOption, op...)
 	}
@@ -63,7 +63,7 @@ type Server struct {
 	Port         int                                                            //服务监听的端口
 	Address      string                                                         //客户端转发的地址
 	OnRegister   func(tun *core.Tunnel, register *core.RegisterReqExtend) error //注册事件
-	TunnelOption []core.OptionTunnel                                            //隧道选项
+	TunnelOption []core.TunnelOption                                            //隧道选项
 }
 
 func (this *Server) Run() error {
@@ -106,7 +106,7 @@ func (this *Server) handler(c net.Conn) error {
 	}
 
 	//说明是隧道连接
-	if n == 2 && prefix[0] == 0x89 && prefix[1] == 0x89 {
+	if n == 2 && prefix[0] == core.Prefix && prefix[1] == core.Prefix {
 		this.tunnelMu.Lock()
 		if this.tunnel != nil && !this.tunnel.Closed() {
 			this.tunnel.Close()
@@ -114,9 +114,9 @@ func (this *Server) handler(c net.Conn) error {
 		this.tunnel = core.NewTunnel(
 			conn,
 			core.WithKey(c.RemoteAddr().String()),
-			core.WithRegister(func(tun *core.Tunnel, p core.Packet) (interface{}, error) {
+			core.WithRegister(func(tun *core.Tunnel, data []byte) (interface{}, error) {
 				register := new(core.RegisterReq)
-				err := json.Unmarshal(p.GetData(), register)
+				err := json.Unmarshal(data, register)
 				if err != nil {
 					return nil, err
 				}

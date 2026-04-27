@@ -28,23 +28,24 @@ func (this *Server) GetTunnel(key string) *core.Tunnel {
 	return nil
 }
 
-func (this *Server) Run(ctx context.Context) error {
+func (this *Server) Run(ctx ...context.Context) error {
 	if this.Clients == nil {
 		this.Clients = maps.NewSafe()
 	}
-	return this.Listen.Listen(ctx, core.WithListenLog, this.Handler)
+	this.Listen.OnConnected(this.Handler)
+	return this.Listen.ListenAndRun(ctx...)
 }
 
 // Handler 对客户端进行注册验证操作
-func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error) {
+func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 
-	var listener net.Listener
+	var listener *core.Listen
 
 	tun := core.NewTunnel(tunConn, core.WithKey(tunConn.RemoteAddr().String()))
-	tun.SetOption(core.WithRegister(func(tun *core.Tunnel, p core.Packet) (interface{}, error) {
+	tun.SetOption(core.WithRegister(func(tun *core.Tunnel, data []byte) (interface{}, error) {
 		//解析注册数据
 		register := new(core.RegisterReq)
-		err := json.Unmarshal(p.GetData(), register)
+		err := json.Unmarshal(data, register)
 		if err != nil {
 			return nil, err
 		}
@@ -61,14 +62,27 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 
 		//判断客户端是否需要监听端口
 		//客户端可以选择不监听端口,而由服务端进行安排
-		if register.Listen == nil || register.Listen.Port == "" {
+		if register.Listen == nil || register.Listen.Address == "" {
 			return register.Listen, nil
 		}
 
 		//监听端口
-		listener, err = register.Listen.GoListen(context.Background(), func(listener net.Listener, c net.Conn) error {
+		err = register.Listen.Listen()
+		if err != nil {
+			logs.Errf("[%s] 监听[:%s]失败: %s\n", tun.Key(), register.Listen.Address, err.Error())
+			return nil, err
+		}
+		listener = register.Listen
+
+		//监听端口
+		register.Listen.OnConnected(func(listener net.Listener, c net.Conn) {
+
 			cKey := c.RemoteAddr().String()
-			defer logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
+
+			var err error
+			defer func() {
+				logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
+			}()
 			defer c.Close()
 
 			proxy := &core.Dial{}
@@ -78,7 +92,7 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 			if registerExtend.OnProxy != nil {
 				proxy, prefix, err = registerExtend.OnProxy(c)
 				if err != nil {
-					return err
+					return
 				}
 			}
 			if proxy == nil {
@@ -86,15 +100,16 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 			}
 
 			//新建个虚拟IO
-			virtual, err := tun.Dial(cKey, proxy, c)
+			var virtual io.ReadWriteCloser
+			virtual, err = tun.Dial(cKey, proxy, c)
 			if err != nil {
-				return err
+				return
 			}
 			defer virtual.Close()
 
-			logs.Infof("监听[:%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Port, tun.Key(), proxy.Address)
+			logs.Infof("监听[%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Address, tun.Key(), proxy.Address)
 
-			return core.Bridge(virtual, struct {
+			err = core.Bridge(virtual, struct {
 				io.Reader
 				io.WriteCloser
 			}{
@@ -103,11 +118,9 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 			})
 
 		})
-		if err != nil {
-			logs.Errf("[%s] 监听端口[:%s]失败: %s\n", tun.Key(), register.Listen.Port, err.Error())
-			return nil, err
-		}
-		logs.Infof("[%s] 监听端口[:%s]成功...\n", tun.Key(), register.Listen.Port)
+
+		go register.Listen.Run()
+		logs.Infof("[%s] 监听[%s]成功...\n", tun.Key(), register.Listen.Address)
 
 		return register.Listen, nil
 	}))
@@ -116,7 +129,10 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 		this.OnConnected(tunConn, tun)
 	}
 
-	defer func() {
+	err := tun.Run()
+	logs.Err(err)
+
+	{
 		this.Clients.Del(tun.Key())
 		tunConn.Close()
 		tun.Close()
@@ -125,9 +141,8 @@ func (this *Server) Handler(tunListen net.Listener, tunConn net.Conn) (err error
 		}
 		if listener != nil {
 			listener.Close()
-			logs.Infof("[%s] 关闭监听...\n", listener.Addr().String())
+			logs.Infof("[%s] 关闭监听...\n", listener.Key())
 		}
-	}()
+	}
 
-	return tun.Run()
 }
