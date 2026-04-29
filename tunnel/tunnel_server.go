@@ -96,8 +96,8 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 
 			proxy := &core.Dial{}
 			prefix := []byte(nil)
-			//使用自定义(服务端)代理->客户端,想让远程连接到哪里
 			if register.OnProxy != nil {
+				//使用自定义(服务端)代理->客户端,想让远程连接到哪里
 				proxy, prefix, err = register.OnProxy(c)
 				if err != nil {
 					return
