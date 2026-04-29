@@ -18,15 +18,15 @@ const (
 
 type frameV1 struct{}
 
-func (this *frameV1) NewPacket(msgID string, _type Type, tags Tags, data any) []byte {
+func (this *frameV1) NewPacket(msgID string, _type Type, tag Tag, data any) []byte {
 	return packetV1{
 		MsgID: msgID,
 		Data:  conv.Bytes(data),
-		Code:  uint8(_type) | uint8(tags[0]|tags[1]|tags[2]),
+		Code:  uint8(_type) | uint8(tag),
 	}.Bytes()
 }
 
-func (this *frameV1) ReadPacket(r io.Reader) (msgID string, _type Type, tags Tags, data []byte, err error) {
+func (this *frameV1) ReadPacket(r io.Reader) (msgID string, _type Type, tag Tag, data []byte, err error) {
 	data, err = this.read(r)
 	if err != nil {
 		return
@@ -36,13 +36,7 @@ func (this *frameV1) ReadPacket(r io.Reader) (msgID string, _type Type, tags Tag
 	if err != nil {
 		return
 	}
-	tags = Tags{
-		Tag(p.Code & 0x80),
-		Tag(p.Code & 0x40),
-		Tag(p.Code & 0x20),
-	}
-
-	return p.MsgID, Type(p.Code & 0x0F), tags, p.Data, nil
+	return p.MsgID, Type(p.Code & 0x0F), Tag(p.Code & 0xF0), p.Data, nil
 }
 
 // Decode 将字节数组解码为数据包

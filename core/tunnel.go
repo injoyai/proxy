@@ -88,8 +88,8 @@ func (this *Tunnel) SetOption(op ...TunnelOption) {
 
 // WritePacket 发送一个数据包到对端
 // msgID 为消息唯一标识,t 为消息类型,i 为消息内容
-func (this *Tunnel) WritePacket(msgID string, _type Type, tags Tags, i any) error {
-	bs := this.f.NewPacket(msgID, _type, tags, i)
+func (this *Tunnel) WritePacket(msgID string, _type Type, tag Tag, i any) error {
+	bs := this.f.NewPacket(msgID, _type, tag, i)
 	_, err := this.r.Write(bs)
 	return err
 }
@@ -98,7 +98,7 @@ func (this *Tunnel) WritePacket(msgID string, _type Type, tags Tags, i any) erro
 // data 为注册信息,通常为 RegisterReq 结构体
 // 返回对端的响应数据
 func (this *Tunnel) Register(data any) (any, error) {
-	if err := this.WritePacket(this.Key(), Register, Tags{Request, Success, NeedAck}, data); err != nil {
+	if err := this.WritePacket(this.Key(), Register, NeedAck, data); err != nil {
 		return nil, err
 	}
 	resp, err := this.wait.Wait(this.Key())
@@ -116,7 +116,7 @@ func (this *Tunnel) Dial(msgID string, dial *Dial, closer io.Closer) (io.ReadWri
 	if len(msgID) == 0 {
 		msgID = uuid.New().String()
 	}
-	if err := this.WritePacket(msgID, Open, Tags{Request, Success, NeedAck}, dial); err != nil {
+	if err := this.WritePacket(msgID, Open, NeedAck, dial); err != nil {
 		return nil, err
 	}
 	val, err := this.wait.Wait(msgID)
@@ -156,11 +156,11 @@ func (this *Tunnel) GetIO(key string) *IO {
 func (this *Tunnel) CreateIO(key string, closer io.Closer) *IO {
 	v := NewIO(this.r, func(v *IO) {
 		v.OnWrite = func(bs []byte) ([]byte, error) {
-			p := this.f.NewPacket(key, Write, Tags{}, bs)
+			p := this.f.NewPacket(key, Write, Request, bs)
 			return p, nil
 		}
 		v.OnClose = func(v *IO, err error) error {
-			this.WritePacket(key, Close, Tags{}, err)
+			this.WritePacket(key, Close, Request, err)
 			this.ioMu.Lock()
 			delete(this.ioMap, key)
 			this.ioMu.Unlock()
@@ -218,10 +218,10 @@ func (this *Tunnel) Run() (err error) {
 		// 判断是否需要响应
 		if tags.NeedAck() {
 			if err != nil {
-				err = this.WritePacket(msgID, _type, Tags{Response, Fail}, err)
+				err = this.WritePacket(msgID, _type, Response|Fail, err)
 				logs.PrintErr(err)
 			} else {
-				err = this.WritePacket(msgID, _type, Tags{Response, Success}, resp)
+				err = this.WritePacket(msgID, _type, Response|Success, resp)
 				logs.PrintErr(err)
 			}
 		}

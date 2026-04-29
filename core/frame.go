@@ -2,10 +2,7 @@ package core
 
 import "io"
 
-type (
-	Type uint8
-	Tag  uint8
-)
+type Type uint8
 
 // 消息类型常量,定义隧道中传输的各种操作类型
 const (
@@ -25,24 +22,24 @@ const (
 	NeedAck  Tag = 0x20 // NeedAck 需要确认,请求包设置此标志表示需要对方回复
 )
 
-type Tags [3]Tag
+type Tag uint8
 
 // IsRequest 判断是否为请求包
-func (this Tags) IsRequest() bool {
-	return this[0]&Response == 0
+func (this Tag) IsRequest() bool {
+	return this&Response == 0
 }
 
 // Success 判断响应是否成功,通过检查Fail位是否为0
-func (this Tags) Success() bool {
-	return this[1]&Fail == 0x00
+func (this Tag) Success() bool {
+	return this&Fail == 0x00
 }
 
 // NeedAck 判断是否需要确认,仅对请求包有效
-func (this Tags) NeedAck() bool {
-	return this[2]&NeedAck == NeedAck
+func (this Tag) NeedAck() bool {
+	return this&NeedAck == NeedAck
 }
 
 type Frame interface {
-	NewPacket(msgID string, _type Type, tags Tags, data any) []byte
-	ReadPacket(r io.Reader) (msgID string, _type Type, tags Tags, data []byte, err error)
+	NewPacket(msgID string, _type Type, tag Tag, data any) []byte
+	ReadPacket(r io.Reader) (msgID string, _type Type, tag Tag, data []byte, err error)
 }
