@@ -59,7 +59,6 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 		if err != nil {
 			return nil, err
 		}
-		//registerExtend := register.Extend()
 
 		//注册事件
 		if this.OnRegister != nil {
@@ -97,8 +96,7 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 
 			proxy := &core.Dial{}
 			prefix := []byte(nil)
-
-			//使用自定义(服务端)代理
+			//使用自定义(服务端)代理->客户端,想让远程连接到哪里
 			if register.OnProxy != nil {
 				proxy, prefix, err = register.OnProxy(c)
 				if err != nil {
@@ -110,22 +108,25 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 			}
 
 			//新建个虚拟IO
-			var virtual io.ReadWriteCloser
-			virtual, err = tun.Dial(cKey, proxy, c)
+			var virtualIO io.ReadWriteCloser
+			virtualIO, err = tun.Dial(cKey, proxy, c)
 			if err != nil {
 				return
 			}
-			defer virtual.Close()
+			defer virtualIO.Close()
 
 			logs.Infof("监听[%s] -> 隧道[%s] -> 请求[%s]\n", register.Listen.Address, tun.Key(), proxy.Address)
 
-			err = core.Bridge(virtual, struct {
+			//真实io
+			realIO := struct {
 				io.Reader
 				io.WriteCloser
 			}{
 				Reader:      io.MultiReader(bytes.NewReader(prefix), c),
 				WriteCloser: c,
-			})
+			}
+
+			err = core.Bridge(virtualIO, realIO)
 
 		})
 

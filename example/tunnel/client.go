@@ -27,7 +27,7 @@ func main() {
 			},
 		}
 		logs.Err(t.Run(
-			core.WithDialTCP("baidu.com:80"),
+			//core.WithDialTCP("baidu.com:80"),
 			core.WithKey(key),
 		))
 		<-time.After(time.Second * 5)

@@ -14,7 +14,7 @@ func main() {
 		Listen: core.NewListenTCP(7000),
 		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReq) error {
 			reg.OnProxy = func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
-				return &core.Dial{Address: ":80"}, nil, nil
+				return &core.Dial{Address: "baidu.com:80"}, nil, nil
 			}
 			tun.SetKey(reg.GetString("key"))
 			logs.Debugf("注册信息: %v\n", *reg)

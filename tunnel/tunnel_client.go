@@ -62,10 +62,12 @@ func (this *Client) Dial(op ...core.TunnelOption) error {
 	resp, err := this.tunnel.Register(this.Register)
 	if err != nil {
 		//注册失败则关闭虚拟通道
+		logs.Trace("[错误]", err)
 		this.tunnel.CloseWithErr(err)
 		return err
 	}
 	if err := json.Unmarshal(conv.Bytes(resp), &this.Register.Listen); err != nil {
+		logs.Trace("[错误]", err)
 		//可能返回空字符,则解析失败
 		//return err
 	}

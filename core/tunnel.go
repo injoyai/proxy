@@ -27,7 +27,7 @@ func NewTunnel(r io.ReadWriteCloser, option ...TunnelOption) *Tunnel {
 		f:      DefaultFrame,
 		r:      r,
 		ioMap:  map[string]*IO{},
-		wait:   wait.New(time.Second * 5),
+		wait:   wait.New(time.Second * 30),
 		Closer: safe.NewCloser(),
 		dial:   DefaultDial,
 	}
@@ -124,10 +124,12 @@ func (this *Tunnel) Dial(msgID string, dial *Dial, closer io.Closer) (io.ReadWri
 		return nil, err
 	}
 	res := new(DialRes)
-	if err := json.Unmarshal([]byte(val.(string)), res); err != nil {
+	if err := json.Unmarshal(conv.Bytes(val), res); err != nil {
 		return nil, err
 	}
-	*dial = *res.Dial
+	if res != nil {
+		*dial = *res.Dial
+	}
 	return this.CreateIO(res.Key, closer), nil
 }
 
@@ -199,9 +201,9 @@ func (this *Tunnel) Run() (err error) {
 		// 处理响应数据
 		if !tags.IsRequest() {
 			if tags.Success() {
-				this.wait.Done(msgID, string(data))
+				this.wait.Done(msgID, data)
 			} else {
-				this.wait.Done(msgID, errors.New(string(data)))
+				this.wait.Done(msgID, nil, errors.New(string(data)))
 			}
 			continue
 		}
@@ -209,7 +211,8 @@ func (this *Tunnel) Run() (err error) {
 		// 处理隧道过来的请求数据
 		resp, err := this.dealMessage(msgID, _type, data)
 		if err != nil {
-			return err
+			logs.Trace("[错误]", err)
+			//这里的错误需要返回给客户端
 		}
 
 		// 判断是否需要响应
