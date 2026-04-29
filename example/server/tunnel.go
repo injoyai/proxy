@@ -3,7 +3,6 @@ package main
 import (
 	"errors"
 
-	"github.com/injoyai/base/maps"
 	"github.com/injoyai/logs"
 	"github.com/injoyai/proxy/core"
 	"github.com/injoyai/proxy/tunnel"
@@ -16,9 +15,8 @@ var (
 func RunTunnel(port int) error {
 	logs.SetLevel(logs.LevelInfo)
 	Tunnel = &tunnel.Server{
-		Clients: maps.NewSafe(),
-		Listen:  core.NewListenTCP(port),
-		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReqExtend) error {
+		Listen: core.NewListenTCP(port),
+		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReq) error {
 			switch reg.Param["version"] {
 			default:
 				if reg.Password != "password" {

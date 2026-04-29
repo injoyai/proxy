@@ -13,25 +13,35 @@ import (
 )
 
 type Server struct {
-	Clients     *maps.Safe                                                //客户端
-	Listen      *core.Listen                                              //监听配置
-	OnRegister  func(tun *core.Tunnel, reg *core.RegisterReqExtend) error //注册事件
-	OnConnected func(conn io.ReadWriteCloser, tun *core.Tunnel)           //连接事件
-	OnClosed    func(key *core.Tunnel, err error)                         //关闭事件
+	clients     *maps.Generic[string, *core.Tunnel]                 //客户端
+	Listen      *core.Listen                                        //监听配置
+	OnRegister  func(tun *core.Tunnel, reg *core.RegisterReq) error //注册事件
+	OnConnected func(conn io.ReadWriteCloser, tun *core.Tunnel)     //连接事件
+	OnClosed    func(key *core.Tunnel, err error)                   //关闭事件
 }
 
 func (this *Server) GetTunnel(key string) *core.Tunnel {
-	x, ok := this.Clients.Get(key)
-	if ok {
-		return x.(*core.Tunnel)
+	if this.clients == nil {
+		this.clients = maps.NewGeneric[string, *core.Tunnel]()
 	}
-	return nil
+	return this.clients.MustGet(key)
+}
+
+func (this *Server) SetTunnel(key string, tun *core.Tunnel) {
+	if this.clients == nil {
+		this.clients = maps.NewGeneric[string, *core.Tunnel]()
+	}
+	this.clients.Set(key, tun)
+}
+
+func (this *Server) DelTunnel(key string) {
+	if this.clients == nil {
+		this.clients = maps.NewGeneric[string, *core.Tunnel]()
+	}
+	this.clients.Del(key)
 }
 
 func (this *Server) Run(ctx ...context.Context) error {
-	if this.Clients == nil {
-		this.Clients = maps.NewSafe()
-	}
 	this.Listen.OnConnected(this.Handler)
 	return this.Listen.ListenAndRun(ctx...)
 }
@@ -49,16 +59,16 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 		if err != nil {
 			return nil, err
 		}
-		registerExtend := register.Extend()
+		//registerExtend := register.Extend()
 
 		//注册事件
 		if this.OnRegister != nil {
-			if err := this.OnRegister(tun, registerExtend); err != nil {
+			if err := this.OnRegister(tun, register); err != nil {
 				return nil, err
 			}
 		}
 		//如果存在老的连接的话,会被覆盖,变成野连接,能收到数据,不能发数据,还是说关闭老连接?
-		this.Clients.Set(tun.Key(), tun)
+		this.SetTunnel(tun.Key(), tun)
 
 		//判断客户端是否需要监听端口
 		//客户端可以选择不监听端口,而由服务端进行安排
@@ -89,8 +99,8 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 			prefix := []byte(nil)
 
 			//使用自定义(服务端)代理
-			if registerExtend.OnProxy != nil {
-				proxy, prefix, err = registerExtend.OnProxy(c)
+			if register.OnProxy != nil {
+				proxy, prefix, err = register.OnProxy(c)
 				if err != nil {
 					return
 				}
@@ -133,7 +143,7 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 	logs.Err(err)
 
 	{
-		this.Clients.Del(tun.Key())
+		this.DelTunnel(tun.Key())
 		tunConn.Close()
 		tun.Close()
 		if this.OnClosed != nil {

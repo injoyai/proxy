@@ -8,10 +8,6 @@ import (
 	"github.com/injoyai/proxy/tunnel"
 )
 
-func init() {
-	logs.SetLevel(logs.LevelInfo)
-}
-
 func main() {
 	key := "ABC"
 	for {

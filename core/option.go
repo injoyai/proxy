@@ -75,6 +75,7 @@ func WithDial(f func(d *Dial) (io.ReadWriteCloser, string, error)) TunnelOption 
 // 忽略服务端下发的连接配置,直接使用指定的地址和超时时间
 func WithDialTCP(address string, timeout ...time.Duration) TunnelOption {
 	return WithDial(func(d *Dial) (io.ReadWriteCloser, string, error) {
+		d.Address = address
 		_timeout := conv.Default(0, timeout...)
 		c, err := net.DialTimeout("tcp", address, _timeout)
 		if err != nil {

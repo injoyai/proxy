@@ -37,7 +37,7 @@ func main() {
 	s := special.New(
 		special.WithPort(port),       //服务监听端口
 		special.WithAddress(address), //内网穿透地址
-		special.WithRegister(func(tun *core.Tunnel, register *core.RegisterReqExtend) error {
+		special.WithRegister(func(tun *core.Tunnel, register *core.RegisterReq) error {
 			if len(username) > 0 && register.Username != username {
 				return fmt.Errorf("账号或密码错误")
 			}

@@ -26,7 +26,7 @@ func WithPort(port int) Option {
 	}
 }
 
-func WithRegister(onRegister func(tun *core.Tunnel, register *core.RegisterReqExtend) error) Option {
+func WithRegister(onRegister func(tun *core.Tunnel, register *core.RegisterReq) error) Option {
 	return func(s *Server) {
 		s.OnRegister = onRegister
 	}
@@ -60,10 +60,10 @@ type Server struct {
 	tunnelMu sync.RWMutex
 	listener net.Listener
 
-	Port         int                                                            //服务监听的端口
-	Address      string                                                         //客户端转发的地址
-	OnRegister   func(tun *core.Tunnel, register *core.RegisterReqExtend) error //注册事件
-	TunnelOption []core.TunnelOption                                            //隧道选项
+	Port         int                                                      //服务监听的端口
+	Address      string                                                   //客户端转发的地址
+	OnRegister   func(tun *core.Tunnel, register *core.RegisterReq) error //注册事件
+	TunnelOption []core.TunnelOption                                      //隧道选项
 }
 
 func (this *Server) Run() error {
@@ -121,7 +121,7 @@ func (this *Server) handler(c net.Conn) error {
 					return nil, err
 				}
 				if this.OnRegister != nil {
-					if err := this.OnRegister(tun, register.Extend()); err != nil {
+					if err := this.OnRegister(tun, register); err != nil {
 						return nil, err
 					}
 				}

@@ -8,15 +8,11 @@ import (
 	"github.com/injoyai/proxy/tunnel"
 )
 
-func init() {
-	//logs.SetLevel(logs.LevelInfo)
-}
-
 func main() {
 
 	t := tunnel.Server{
 		Listen: core.NewListenTCP(7000),
-		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReqExtend) error {
+		OnRegister: func(tun *core.Tunnel, reg *core.RegisterReq) error {
 			reg.OnProxy = func(r io.ReadWriteCloser) (*core.Dial, []byte, error) {
 				return &core.Dial{Address: ":80"}, nil, nil
 			}

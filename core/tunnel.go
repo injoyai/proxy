@@ -282,20 +282,13 @@ func (this *Tunnel) dealMessage(msgID string, _type Type, data []byte) (any, err
 }
 
 // dealOpen 处理 Open 类型的请求,建立到目标地址的连接
-func (this *Tunnel) dealOpen(data []byte) (any, error) {
+func (this *Tunnel) dealOpen(data []byte) (*DialRes, error) {
 	if this.dial == nil {
 		return nil, ErrDialInvalid
 	}
-	m := conv.NewMap(data)
-	gm := m.GMap()
-	delete(gm, "type")
-	delete(gm, "address")
-	delete(gm, "timeout")
-	d := &Dial{
-		Type:    m.GetString("type", "tcp"),
-		Address: m.GetString("address"),
-		Timeout: m.GetDuration("timeout"),
-		Param:   gm,
+	d := new(Dial)
+	if err := json.Unmarshal(data, d); err != nil {
+		return nil, err
 	}
 	c, key, err := this.dial(d)
 	if err != nil {
@@ -306,5 +299,5 @@ func (this *Tunnel) dealOpen(data []byte) (any, error) {
 	}
 	i := this.CreateIO(key, c)
 	go Bridge(i, c)
-	return DialRes{Key: key, Dial: d}, nil
+	return &DialRes{Key: key, Dial: d}, nil
 }

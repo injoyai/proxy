@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/injoyai/conv"
-	"github.com/injoyai/logs"
 )
 
 // Dialer 连接拨号器接口,用于创建到目标地址的连接
@@ -59,31 +58,22 @@ type DialRes struct {
 
 // RegisterReq 客户端注册请求,客户端连接服务端后发送此消息进行注册
 type RegisterReq struct {
-	Listen   *Listen        `json:"listen,omitempty"`   // Listen 客户端需要监听的端口配置,可选
-	Key      string         `json:"key"`                // Key 客户端唯一标识
-	Username string         `json:"username,omitempty"` // Username 用户名,用于认证
-	Password string         `json:"password,omitempty"` // Password 密码,用于认证
-	Param    map[string]any `json:"param,omitempty"`    // Param 其他自定义参数
-}
-
-// Extend 将 RegisterReq 转换为扩展版本 RegisterReqExtend
-// 扩展版本包含更多运行时信息,如 OnProxy 回调
-func (this *RegisterReq) Extend() *RegisterReqExtend {
-	return &RegisterReqExtend{
-		Listen:   this.Listen,
-		Key:      this.Key,
-		Username: this.Username,
-		Password: this.Password,
-		Param:    this.Param,
-		Extend:   conv.NewExtend(this),
-	}
+	Listen   *Listen                                           `json:"listen,omitempty"`   // Listen 客户端需要监听的端口配置,可选
+	Key      string                                            `json:"key"`                // Key 客户端唯一标识
+	Username string                                            `json:"username,omitempty"` // Username 用户名,用于认证
+	Password string                                            `json:"password,omitempty"` // Password 密码,用于认证
+	Param    map[string]any                                    `json:"param,omitempty"`    // Param 其他自定义参数
+	OnProxy  func(r io.ReadWriteCloser) (*Dial, []byte, error) `json:"-"`                  // OnProxy 代理回调,用于控制外部连接如何转发到隧道
 }
 
 // String 将注册请求序列化为 JSON 字符串,用于日志输出
 func (this *RegisterReq) String() string {
-	bs, err := json.Marshal(this)
-	logs.PrintErr(err)
+	bs, _ := json.Marshal(this)
 	return string(bs)
+}
+
+func (this *RegisterReq) GetString(key string) string {
+	return this.GetVar(key).String()
 }
 
 // GetVar 根据 key 获取对应的注册信息值
@@ -102,16 +92,4 @@ func (this *RegisterReq) GetVar(key string) *conv.Var {
 		}
 	}
 	return conv.Nil()
-}
-
-// RegisterReqExtend 注册请求的扩展版本,包含运行时信息
-// 在服务端处理注册时使用,可以设置 OnProxy 回调来控制代理行为
-type RegisterReqExtend struct {
-	Listen      *Listen                                           `json:"listen,omitempty"`   // Listen 客户端监听的端口配置
-	Key         string                                            `json:"key,omitempty"`      // Key 客户端唯一标识
-	Username    string                                            `json:"username,omitempty"` // Username 用户名
-	Password    string                                            `json:"password,omitempty"` // Password 密码
-	Param       map[string]any                                    `json:"param,omitempty"`    // Param 其他自定义参数
-	conv.Extend `json:"-"`                                        // Extend 扩展属性容器
-	OnProxy     func(r io.ReadWriteCloser) (*Dial, []byte, error) // OnProxy 代理回调,用于控制外部连接如何转发到隧道
 }
