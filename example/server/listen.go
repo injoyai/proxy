@@ -118,7 +118,7 @@ func (this *Listen) handler(c net.Conn) error {
 			return err
 		}
 		c1 := bytes.NewReader(bs)
-		return tun.DialBridge(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return tun.DialBridge(core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer
@@ -137,7 +137,7 @@ func (this *Listen) handler(c net.Conn) error {
 			c.Write([]byte(this.MsgOffline))
 			return nil
 		}
-		return tun.DialBridge(c.RemoteAddr().String(), core.NewDialTCP(info.Address), struct {
+		return tun.DialBridge(core.NewDialTCP(info.Address), struct {
 			io.Reader
 			io.Writer
 			io.Closer

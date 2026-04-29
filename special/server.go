@@ -106,7 +106,7 @@ func (this *Server) handler(c net.Conn) error {
 	}
 
 	//说明是隧道连接
-	if n == 2 && prefix[0] == core.Prefix && prefix[1] == core.Prefix {
+	if n == 2 && prefix[0] == 0x89 && prefix[1] == 0x89 {
 		this.tunnelMu.Lock()
 		if this.tunnel != nil && !this.tunnel.Closed() {
 			this.tunnel.Close()
@@ -114,7 +114,7 @@ func (this *Server) handler(c net.Conn) error {
 		this.tunnel = core.NewTunnel(
 			conn,
 			core.WithKey(c.RemoteAddr().String()),
-			core.WithRegister(func(tun *core.Tunnel, data []byte) (interface{}, error) {
+			core.WithRegister(func(tun *core.Tunnel, data []byte) (any, error) {
 				register := new(core.RegisterReq)
 				err := json.Unmarshal(data, register)
 				if err != nil {
@@ -144,6 +144,6 @@ func (this *Server) handler(c net.Conn) error {
 	logs.Infof("监听[:%d] -> 隧道[%s] -> 请求[%s]\n", this.Port, this.tunnel.Key(), this.Address)
 
 	//普通代理连接
-	return this.tunnel.DialBridge(c.RemoteAddr().String(), core.NewDialTCP(this.Address), conn)
+	return this.tunnel.DialBridge(core.NewDialTCP(this.Address), conn)
 
 }

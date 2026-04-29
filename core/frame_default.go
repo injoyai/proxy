@@ -12,8 +12,8 @@ var DefaultFrame Frame = &frameV1{}
 
 // 帧协议常量
 const (
-	Prefix    = 0x89 // FramePrefix1 帧头第一个字节
-	Delimiter = '#'  // FrameDelimiter 帧内字段分隔符
+	prefix    = 0x89 // FramePrefix1 帧头第一个字节
+	delimiter = '#'  // FrameDelimiter 帧内字段分隔符
 )
 
 type frameV1 struct{}
@@ -44,7 +44,7 @@ func (this *frameV1) decode(bs []byte) (*packetV1, error) {
 	if len(bs) < 2 {
 		return nil, fmt.Errorf("基础长度错误,预期至少2字节,得到%d", len(bs))
 	}
-	list := bytes.SplitN(bs, []byte{Delimiter}, 2)
+	list := bytes.SplitN(bs, []byte{delimiter}, 2)
 	if len(list) != 2 {
 		return nil, fmt.Errorf("数据分割异常: %v", bs)
 	}
@@ -71,7 +71,7 @@ func (this *frameV1) read(r io.Reader) ([]byte, error) {
 		if err != nil {
 			return nil, err
 		}
-		if n != 2 || bufPrefix[0] != Prefix || bufPrefix[1] != Prefix {
+		if n != 2 || bufPrefix[0] != prefix || bufPrefix[1] != prefix {
 			continue
 		}
 
@@ -112,11 +112,11 @@ func (this packetV1) Bytes() []byte {
 	lenData := len(this.Data)
 	lenKey := len(this.MsgID)
 	bs := make([]byte, len(this.Data)+lenKey+8)
-	copy(bs[0:2], []byte{Prefix, Prefix})
+	copy(bs[0:2], []byte{prefix, prefix})
 	copy(bs[2:6], conv.Bytes(uint32(lenKey+2+lenData)))
 	copy(bs[6:len(this.MsgID)+6], this.MsgID)
-	bs[lenKey+6] = Delimiter
-	bs[lenKey+7] = uint8(this.Code)
+	bs[lenKey+6] = delimiter
+	bs[lenKey+7] = this.Code
 	copy(bs[lenKey+8:], this.Data)
 	return bs
 }

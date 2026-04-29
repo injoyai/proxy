@@ -30,5 +30,7 @@ func (this *Forward) Handler(l net.Listener, c net.Conn) {
 	defer newConn.Close()
 
 	err = core.Bridge(c, newConn)
-	_ = err
+	if err != nil {
+		logs.Trace("[错误]", err)
+	}
 }

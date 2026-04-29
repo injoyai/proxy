@@ -52,7 +52,7 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 	var listener *core.Listen
 
 	tun := core.NewTunnel(tunConn, core.WithKey(tunConn.RemoteAddr().String()))
-	tun.SetOption(core.WithRegister(func(tun *core.Tunnel, data []byte) (interface{}, error) {
+	tun.SetOption(core.WithRegister(func(tun *core.Tunnel, data []byte) (any, error) {
 		//解析注册数据
 		register := new(core.RegisterReq)
 		err := json.Unmarshal(data, register)
@@ -86,11 +86,9 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 		//监听端口
 		register.Listen.OnConnected(func(listener net.Listener, c net.Conn) {
 
-			cKey := c.RemoteAddr().String()
-
 			var err error
 			defer func() {
-				logs.Tracef("[%s] 关闭连接: %v\n", cKey, err)
+				logs.Tracef("[%s] 关闭连接: %v\n", c.RemoteAddr().String(), err)
 			}()
 			defer c.Close()
 
@@ -109,7 +107,7 @@ func (this *Server) Handler(_ net.Listener, tunConn net.Conn) {
 
 			//新建个虚拟IO
 			var virtualIO io.ReadWriteCloser
-			virtualIO, err = tun.Dial(cKey, proxy, c)
+			virtualIO, err = tun.Dial(proxy, c.Close)
 			if err != nil {
 				return
 			}

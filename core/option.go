@@ -47,7 +47,7 @@ func WithWaitTimeout(timeout time.Duration) TunnelOption {
 // WithRegister 设置注册回调函数
 // 服务端使用此函数验证客户端的注册信息
 // 返回 nil 表示注册成功,返回 error 表示注册失败
-func WithRegister(f func(v *Tunnel, data []byte) (interface{}, error)) TunnelOption {
+func WithRegister(f func(v *Tunnel, data []byte) (any, error)) TunnelOption {
 	return func(v *Tunnel) {
 		v.onRegister = f
 	}

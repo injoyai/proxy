@@ -65,7 +65,7 @@ type Tunnel struct {
 	registered atomic.Bool        // registered 是否已完成注册
 
 	dial       func(d *Dial) (io.ReadWriteCloser, string, error) // dial 拨号函数
-	onRegister func(v *Tunnel, data []byte) (interface{}, error) // onRegister 注册回调
+	onRegister func(v *Tunnel, data []byte) (any, error)         // onRegister 注册回调
 	onDialed   func(d *Dial, key string)                         // onDialed 连接成功回调
 }
 
@@ -98,7 +98,7 @@ func (this *Tunnel) WritePacket(msgID string, _type Type, tag Tag, i any) error 
 // data 为注册信息,通常为 RegisterReq 结构体
 // 返回对端的响应数据
 func (this *Tunnel) Register(data any) (any, error) {
-	if err := this.WritePacket(this.Key(), Register, NeedAck, data); err != nil {
+	if err := this.WritePacket(this.Key(), Register, Request|NeedAck, data); err != nil {
 		return nil, err
 	}
 	resp, err := this.wait.Wait(this.Key())
@@ -112,11 +112,9 @@ func (this *Tunnel) Register(data any) (any, error) {
 // Dial 向对端发起建立连接的请求
 // msgID 为消息唯一标识(为空则自动生成),dial 为目标连接配置,closer 为关闭回调
 // 返回一个虚拟IO,可以通过此IO与目标地址进行数据交互
-func (this *Tunnel) Dial(msgID string, dial *Dial, closer io.Closer) (io.ReadWriteCloser, error) {
-	if len(msgID) == 0 {
-		msgID = uuid.New().String()
-	}
-	if err := this.WritePacket(msgID, Open, NeedAck, dial); err != nil {
+func (this *Tunnel) Dial(dial *Dial, onClose func() error) (io.ReadWriteCloser, error) {
+	msgID := uuid.New().String()
+	if err := this.WritePacket(msgID, Open, Request|NeedAck, dial); err != nil {
 		return nil, err
 	}
 	val, err := this.wait.Wait(msgID)
@@ -130,14 +128,14 @@ func (this *Tunnel) Dial(msgID string, dial *Dial, closer io.Closer) (io.ReadWri
 	if res != nil {
 		*dial = *res.Dial
 	}
-	return this.CreateIO(res.Key, closer), nil
+	return this.CreateIO(res.Key, onClose), nil
 }
 
 // DialBridge 建立连接并进行数据桥接
 // 相当于 Dial 后调用 Bridge 进行双向数据转发
-func (this *Tunnel) DialBridge(msgID string, dial *Dial, userConn io.ReadWriteCloser) error {
+func (this *Tunnel) DialBridge(dial *Dial, userConn io.ReadWriteCloser) error {
 	defer userConn.Close()
-	i, err := this.Dial(msgID, dial, nil)
+	i, err := this.Dial(dial, nil)
 	if err != nil {
 		return err
 	}
@@ -153,19 +151,19 @@ func (this *Tunnel) GetIO(key string) *IO {
 
 // CreateIO 创建一个新的虚拟IO并注册到隧道中
 // key 为IO的唯一标识,closer 为关闭时触发的回调
-func (this *Tunnel) CreateIO(key string, closer io.Closer) *IO {
+func (this *Tunnel) CreateIO(key string, onClose func() error) *IO {
 	v := NewIO(this.r, func(v *IO) {
 		v.OnWrite = func(bs []byte) ([]byte, error) {
 			p := this.f.NewPacket(key, Write, Request, bs)
 			return p, nil
 		}
 		v.OnClose = func(v *IO, err error) error {
-			this.WritePacket(key, Close, Request, err)
+			this.WritePacket(key, Close, Request, err) //可忽略错误
 			this.ioMu.Lock()
 			delete(this.ioMap, key)
 			this.ioMu.Unlock()
-			if closer != nil {
-				closer.Close()
+			if onClose != nil {
+				return onClose()
 			}
 			return nil
 		}
@@ -174,6 +172,10 @@ func (this *Tunnel) CreateIO(key string, closer io.Closer) *IO {
 	this.ioMap[key] = v
 	this.ioMu.Unlock()
 	return v
+}
+
+func (this *Tunnel) Running() bool {
+	return this.running.Load()
 }
 
 // Run 启动隧道主循环,开始处理数据包
@@ -300,7 +302,7 @@ func (this *Tunnel) dealOpen(data []byte) (*DialRes, error) {
 	if this.onDialed != nil {
 		this.onDialed(d, key)
 	}
-	i := this.CreateIO(key, c)
+	i := this.CreateIO(key, c.Close)
 	go Bridge(i, c)
 	return &DialRes{Key: key, Dial: d}, nil
 }
